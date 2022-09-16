@@ -18,9 +18,9 @@ define_init(print){
 NO_RETURN void main()
 {
     extern char etext[], data[], edata[], end[];
-    memset(edata, 0, end - edata);
     
     if(cpuid() == 0){
+        memset(edata, 0, end - edata);
         do_early_init();
         do_init();
     }
