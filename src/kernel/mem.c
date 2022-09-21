@@ -13,21 +13,22 @@ define_early_init(alloc_page_cnt){
 }
 
 static QueueNode* pages;
-static ListNode* free_mem[CORE_NUM][MAX_ORDER];
+static ListNode free_mem[CORE_NUM][MAX_ORDER];
 
 extern char end[];
 
-define_early_init(free_mem){
+define_early_init(free_mem){ //init list head
     for(int i=0;i<CORE_NUM;++i){
         for(int j=0;j<MAX_ORDER;++j){
-            free_mem[i][j] = NULL;
+            free_mem[i][j].prev = &free_mem[i][j];
+            free_mem[i][j].next = NULL;
         }
     }
 }
 
-SpinLock* mem_lock;
-define_early_init(mem_lock){
-    init_spinlock(mem_lock);
+SpinLock* mem_list_lock;
+define_early_init(mem_list_lock){
+    init_spinlock(mem_list_lock);
 }
 
 define_early_init(pages){
@@ -58,59 +59,68 @@ int __log2(i64 num){
     return ret;
 }
 
+void merge_node(void* node, int idx){
+    for(int i = idx; i < MAX_ORDER; ++i){
+        void* dst;
+        int flag = 0;
+        if((i64)node % (1<<(i+1)) == 0){
+            dst = node + (1<<i);
+        }
+        else{
+            dst = node - (1<<i);
+        }
+        _for_in_list(l_node, &free_mem[cpuid()][i]){
+            if(l_node == dst){
+                flag = 1;
+                break;
+            }
+        }
+        if(flag){
+            if(i == MAX_ORDER - 1){
+                _insert_into_list(&free_mem[cpuid()][i],node);
+                break;
+            }
+            node = (node < dst) ? node : dst; 
+            _detach_from_list(dst);
+        }
+        else{
+            _insert_into_list(&free_mem[cpuid()][i],node);
+            break;
+        }
+    }
+}
+
 // TODO: kalloc kfree
 void* kalloc(isize size){
     size += 8;
     int idx = __log2(size);
     int pos = idx;
     void* ret = NULL;
-    while(idx < MAX_ORDER && free_mem[cpuid()][idx] == NULL){
+    while(idx < MAX_ORDER && free_mem[cpuid()][idx].next == NULL){
         ++idx;
     }
     if(idx == MAX_ORDER){
         void* new_page = kalloc_page();
         if(pos != MAX_ORDER){
-            for(int i = MAX_ORDER-1; i >= pos; --i){
+            for(int i = pos; i <= MAX_ORDER-1; ++i){
                 void* dst = new_page + (1<<i);
-                if(free_mem[cpuid()][i] == NULL){
-                    init_list_node((ListNode*)dst);
-                    free_mem[cpuid()][i] = (ListNode*)dst;
-                }
-                else{
-                    init_list_node((ListNode*)dst);
-                    ((ListNode*)(dst))->next = free_mem[cpuid()][i];
-                    free_mem[cpuid()][i]->prev = (ListNode*)(dst);
-                    free_mem[cpuid()][i] = (ListNode*)(dst);
-                }
+                merge_node(dst,i);
             }
         }
         *(i64*) new_page = pos;
         ret = new_page + 8;
     }
     else{
-        void* new_addr = free_mem[cpuid()][idx];
-        free_mem[cpuid()][idx] = free_mem[cpuid()][idx]->next;
-        if(free_mem[cpuid()][idx] != NULL){
-            free_mem[cpuid()][idx]->prev = free_mem[cpuid()][idx];
-        }
-
-        for(int i = idx-1; i >= pos; --i){
+        void* new_addr = free_mem[cpuid()][idx].next;
+        _detach_from_list(new_addr);
+        for(int i = pos; i <= idx-1; ++i){
             void* dst = new_addr + (1<<i);
-                if(free_mem[cpuid()][i] == NULL){
-                    init_list_node((ListNode*)dst);
-                    free_mem[cpuid()][i] = (ListNode*)dst;
-                }
-                else{
-                    init_list_node((ListNode*)dst);
-                    ((ListNode*)(dst))->next = free_mem[cpuid()][i];
-                    free_mem[cpuid()][i]->prev = (ListNode*)(dst);
-                    free_mem[cpuid()][i] = (ListNode*)(dst);
-                }
+            merge_node(dst,i);
         }
         *(i64*) new_addr = pos;
         ret = new_addr + 8;
     }
-    //printk("cpu: %d size: %d  addr: %lld \n",cpuid(),(int)size,((i64)ret & 0x0000FFFFFFFFFFFF));
+    //printk("cpu: %d size: %d  addr: %p \n",cpuid(),(int)size,ret);
     return ret;
 }
 
@@ -122,15 +132,6 @@ void kfree(void* p){
         kfree_page(p);
     }
     else{
-        if(free_mem[cpuid()][idx] == NULL){
-            init_list_node((ListNode*)p);
-            free_mem[cpuid()][idx] = (ListNode*)p;
-        }
-        else{
-            init_list_node((ListNode*)p);
-            ((ListNode*)p)->next = free_mem[cpuid()][idx];
-            free_mem[cpuid()][idx]->prev = (ListNode*)p;
-            free_mem[cpuid()][idx] = (ListNode*)p;
-        }
+        merge_node(p,idx);
     }
 }
