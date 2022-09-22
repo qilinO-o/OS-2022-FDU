@@ -60,7 +60,8 @@ int __log2(i64 num){
 }
 
 void merge_node(void* node, int idx){
-    for(int i = idx; i < MAX_ORDER; ++i){
+    int up = MAX_ORDER;
+    for(int i = idx; i < up; ++i){
         void* dst;
         int flag = 0;
         if((i64)node % (1<<(i+1)) == 0){
@@ -76,12 +77,12 @@ void merge_node(void* node, int idx){
             }
         }
         if(flag){
-            if(i == MAX_ORDER - 1){
-                _insert_into_list(&free_mem[cpuid()][i],node);
-                break;
-            }
             node = (node < dst) ? node : dst; 
             _detach_from_list(dst);
+            if(i == up-1){
+                // _insert_into_list(&free_mem[cpuid()][i],node);
+                kfree_page(node);
+            }
         }
         else{
             _insert_into_list(&free_mem[cpuid()][i],node);
