@@ -8,4 +8,28 @@
 .globl swtch
 swtch:
 // TODO
+/* Save old callee-saved registers */
+    pushp(x17,x18)
+    pushp(x19,x20)
+    pushp(x21,x22)
+    pushp(x23,x24)
+    pushp(x25,x26)
+    pushp(x27,x28)
+    pushp(x29,x30)
+    pushp(x0,x1)
+
+/* Switch stacks */
+    mov x2, sp
+    str x2, [x1]
+    mov sp, x0
+
+/* Load new callee-saved registers */
+    popp(x0,x1)
+    popp(x29,x30)
+    popp(x27,x28)
+    popp(x25,x26)
+    popp(x23,x24)
+    popp(x21,x22)
+    popp(x19,x20)
+    popp(x17,x18)
 
