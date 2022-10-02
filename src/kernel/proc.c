@@ -93,6 +93,7 @@ int wait(int* exitcode){
     ListNode* child_list = &(cp->children);
     acquire_sleeplock(ch_proc_tree_lock, proc_tree_lock);
     if(_empty_list(child_list)){
+        release_sleeplock(ch_proc_tree_lock, proc_tree_lock);
         return -1;
     }
     wait_sem(&(cp->childexit));
@@ -121,7 +122,6 @@ int start_proc(struct proc* p, void(*entry)(u64), u64 arg){
     // 3. activate the proc and return its pid
     // NOTE: be careful of concurrency
     setup_checker(ch_proc_tree_lock);
-    struct proc* cp = thisproc();
     
     if(p->parent == NULL){
         acquire_sleeplock(ch_proc_tree_lock, proc_tree_lock);

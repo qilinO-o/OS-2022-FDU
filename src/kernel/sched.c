@@ -11,12 +11,11 @@ extern bool panic_flag;
 
 extern void swtch(KernelContext* new_ctx, KernelContext** old_ctx);
 
-static SleepLock* sched_lock;
+static SpinLock* sched_lock;
 static ListNode rq;
-setup_checker(ch_sched_lock);
 
 define_early_init(sched_rq){
-    init_sleeplock(sched_lock);
+    init_spinlock(sched_lock);
     init_list_node(&rq);
 }
 
@@ -43,12 +42,12 @@ void init_schinfo(struct schinfo* p){
 
 void _acquire_sched_lock(){
     // TODO acquire the sched_lock if need
-    acquire_sleeplock(ch_sched_lock, sched_lock);
+    _acquire_spinlock(sched_lock);
 }
 
 void _release_sched_lock(){
     // TODO release the sched_lock if need
-    release_sleeplock(ch_sched_lock, sched_lock);
+    _release_spinlock(sched_lock);
 }
 
 bool is_zombie(struct proc* p){
@@ -118,6 +117,7 @@ static void update_this_proc(struct proc* p){
 // A simple scheduler.
 // You are allowed to replace it with whatever you like.
 static void simple_sched(enum procstate new_state){
+        printk("1");
     auto this = thisproc();
     ASSERT(this->state == RUNNING);
     update_this_state(new_state);
