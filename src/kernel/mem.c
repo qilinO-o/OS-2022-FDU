@@ -6,9 +6,9 @@
 #include <kernel/printk.h>
 
 RefCount alloc_page_cnt;
-#define MIN_BLOCK_SIZE 16 
-#define MIN_BLOCK_ORDER 4 // log2(MIN_BLOCK_SIZE)
-#define MAX_ORDER 4096/MIN_BLOCK_SIZE // 4096 / MIN_BLOCK_SIZE
+#define MIN_BLOCK_SIZE 8 
+#define MIN_BLOCK_ORDER 3 // log2(MIN_BLOCK_SIZE)
+#define MAX_ORDER PAGE_SIZE/MIN_BLOCK_SIZE // 4096 / MIN_BLOCK_SIZE
 #define CORE_NUM 4
 define_early_init(alloc_page_cnt){
     init_rc(&alloc_page_cnt);
@@ -62,7 +62,7 @@ void* kalloc(isize size){
     }
     if(idx == MAX_ORDER){
         void* new_page = kalloc_page();
-        if(size < 4096){
+        if(size < PAGE_SIZE){
             void* dst = new_page + size;
             int dst_idx = (PAGE_SIZE - size) / MIN_BLOCK_SIZE - 1;
             add_to_queue(&free_mem[dst_idx], (QueueNode*)dst);

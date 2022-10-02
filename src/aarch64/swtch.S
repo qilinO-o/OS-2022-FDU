@@ -31,3 +31,5 @@ swtch:
     popp(x26,x27)
     popp(x28,x29)
 
+    ret
+

@@ -11,9 +11,9 @@ struct proc root_proc;
 void kernel_entry();
 void proc_entry();
 
-static SleepLock* proc_tree_lock;
+static SpinLock proc_tree_lock;
 define_early_init(proc_tree){
-    init_sleeplock(proc_tree_lock);
+    init_spinlock(&proc_tree_lock);
 }
 
 /* var of pid and functions to allocate pid */
@@ -36,10 +36,10 @@ void set_parent_to_this(struct proc* proc){
     // NOTE: maybe you need to lock the process tree
     // NOTE: it's ensured that the old proc->parent = NULL
     setup_checker(ch_proc_tree_lock);
-    acquire_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+    acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     proc->parent = thisproc();
     _insert_into_list(&(thisproc()->children), &(proc->ptnode));
-    release_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+    release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
 }
 
 NO_RETURN void exit(int code){
@@ -57,7 +57,7 @@ NO_RETURN void exit(int code){
     kfree_page(cp->kstack);
     
 
-    acquire_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+    acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     ListNode* child_list = &(cp->children);
     _for_in_list(node, child_list){
         struct proc* child_proc = container_of(node, struct proc, children);
@@ -71,7 +71,7 @@ NO_RETURN void exit(int code){
         }
     }
     ASSERT(_empty_list(child_list));
-    release_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+    release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     
     setup_checker(ch_sched);
     lock_for_sched(ch_sched);
@@ -91,9 +91,9 @@ int wait(int* exitcode){
     setup_checker(ch_proc_tree_lock);
     struct proc* cp = thisproc();
     ListNode* child_list = &(cp->children);
-    acquire_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+    acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     if(_empty_list(child_list)){
-        release_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+        release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
         return -1;
     }
     wait_sem(&(cp->childexit));
@@ -106,12 +106,12 @@ int wait(int* exitcode){
             int pid_ret = child_proc->pid;
             *exitcode = child_proc->exitcode;
             kfree((void*)child_proc);
-            release_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+            release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
             return pid_ret;
         }
     }
     ASSERT(1);
-    release_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+    release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     return -1;
 }
 
@@ -124,10 +124,10 @@ int start_proc(struct proc* p, void(*entry)(u64), u64 arg){
     setup_checker(ch_proc_tree_lock);
     
     if(p->parent == NULL){
-        acquire_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+        acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
         p->parent = &root_proc;
         _insert_into_list(&(root_proc.children), &(p->ptnode));
-        release_sleeplock(ch_proc_tree_lock, proc_tree_lock);
+        release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     }
     
     //TODO
@@ -152,16 +152,20 @@ void init_proc(struct proc* p){
     init_sem(&(p->childexit),0);
     init_list_node(&(p->children));
     init_list_node(&(p->ptnode));
-    p->parent = NULL;
+    //p->parent = NULL;
     init_schinfo(&(p->schinfo));
     p->kstack = kalloc_page();
+    ASSERT(p->kstack != NULL);
     p->ucontext = (UserContext*)(p->kstack + PAGE_SIZE - 16 - sizeof(UserContext));
     p->kcontext = (KernelContext*)(p->kstack + PAGE_SIZE - 16 - sizeof(UserContext) - sizeof(KernelContext));
 }
 
 struct proc* create_proc(){
+    printk("in_creat_proc\n");
     struct proc* p = kalloc(sizeof(struct proc));
+    printk("finish_kalloc_for_proc\n");
     init_proc(p);
+    printk("finish_init_proc\n");
     return p;
 }
 

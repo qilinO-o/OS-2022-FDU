@@ -123,7 +123,9 @@ void proc_test()
 {
     printk("proc_test\n");
     auto p = create_proc();
+    printk("finish_creat_proc\n");
     int pid = start_proc(p, proc_test_1, 0);
+    printk("finish_start_proc\n");
     int t = 0;
     while (1)
     {
