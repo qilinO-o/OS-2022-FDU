@@ -9,14 +9,13 @@
 swtch:
 // TODO
 /* Save old callee-saved registers */
-    pushp(x17,x18)
-    pushp(x19,x20)
-    pushp(x21,x22)
-    pushp(x23,x24)
-    pushp(x25,x26)
-    pushp(x27,x28)
-    pushp(x29,x30)
-    pushp(x0,x1)
+    pushp(x28,x29)
+    pushp(x26,x27)
+    pushp(x24,x25)
+    pushp(x22,x23)
+    pushp(x20,x21)
+    pushp(x1,x19)
+    pushp(lr,x0)
 
 /* Switch stacks */
     mov x2, sp
@@ -24,12 +23,11 @@ swtch:
     mov sp, x0
 
 /* Load new callee-saved registers */
-    popp(x0,x1)
-    popp(x29,x30)
-    popp(x27,x28)
-    popp(x25,x26)
-    popp(x23,x24)
-    popp(x21,x22)
-    popp(x19,x20)
-    popp(x17,x18)
+    popp(lr,x0)
+    popp(x1,x19)
+    popp(x20,x21)
+    popp(x22,x23)
+    popp(x24,x25)
+    popp(x26,x27)
+    popp(x28,x29)
 

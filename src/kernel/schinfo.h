@@ -8,7 +8,7 @@ struct KernelContext;
 struct sched
 {
     // TODO: customize your sched info
-    struct KernelContext* scheduler;
+    struct proc* idle;
     struct proc* cur_proc;
 };
 
@@ -16,5 +16,5 @@ struct sched
 struct schinfo
 {
     // TODO: customize your sched info
-    
+    ListNode rq_node;
 };

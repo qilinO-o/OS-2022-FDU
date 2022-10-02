@@ -11,24 +11,44 @@ extern bool panic_flag;
 
 extern void swtch(KernelContext* new_ctx, KernelContext** old_ctx);
 
+static SleepLock* sched_lock;
+static ListNode rq;
+setup_checker(ch_sched_lock);
+
+define_early_init(sched_rq){
+    init_sleeplock(sched_lock);
+    init_list_node(&rq);
+}
+
+define_init(scheduler){
+    for(int i=0;i<NCPU;++i){
+        struct proc* new_idle = kalloc(sizeof(struct proc));
+        new_idle->pid = -1;
+        new_idle->idle = true;
+        new_idle->state = RUNNING;
+        cpus[i].sched.idle = new_idle;
+        cpus[i].sched.cur_proc = new_idle;
+    }
+}
+
 struct proc* thisproc(){
     // TODO return the current process
     return cpus[cpuid()].sched.cur_proc;
 }
 
 void init_schinfo(struct schinfo* p){
-    // TODO: initialize your customized schinfo for every newly-created process
-
+    // TODO initialize your customized schinfo for every newly-created process
+    init_list_node(&(p->rq_node));
 }
 
 void _acquire_sched_lock(){
-    // TODO: acquire the sched_lock if need
-
+    // TODO acquire the sched_lock if need
+    acquire_sleeplock(ch_sched_lock, sched_lock);
 }
 
 void _release_sched_lock(){
-    // TODO: release the sched_lock if need
-
+    // TODO release the sched_lock if need
+    release_sleeplock(ch_sched_lock, sched_lock);
 }
 
 bool is_zombie(struct proc* p){
@@ -40,29 +60,59 @@ bool is_zombie(struct proc* p){
 }
 
 bool activate_proc(struct proc* p){
-    // TODO:
+    // TODO
     // if the proc->state is RUNNING/RUNNABLE, do nothing
     // if the proc->state if SLEEPING/UNUSED, set the process state to RUNNABLE and add it to the sched queue
     // else: panic
-
+    _acquire_sched_lock();
+    if(p->state == RUNNING || p->state == RUNNABLE){
+        _release_sched_lock();
+        return false;
+    }
+    else if(p->state == SLEEPING || p->state == UNUSED){
+        p->state = RUNNABLE;
+        _insert_into_list(&rq, &(p->schinfo.rq_node));
+    }
+    else{
+        PANIC();
+    }
+    _release_sched_lock();
+    return true;
 }
 
 static void update_this_state(enum procstate new_state){
-    // TODO: if using simple_sched, you should implement this routinue
+    // TODO: if using simple_sched, you should implement this routine
     // update the state of current process to new_state, and remove it from the sched queue if new_state=SLEEPING/ZOMBIE
-
+    struct proc* cp = thisproc();
+    cp->state = new_state;
+    if(new_state == SLEEPING || new_state == ZOMBIE){
+        _detach_from_list(&(cp->schinfo.rq_node));
+    }
 }
 
 static struct proc* pick_next(){
     // TODO: if using simple_sched, you should implement this routinue
     // choose the next process to run, and return idle if no runnable process
-
+    if(panic_flag){
+        return cpus[cpuid()].sched.idle;
+    }
+    _for_in_list(node, &rq){
+        if(node == &rq){
+            continue;
+        }
+        struct proc* next_proc = container_of(node, struct proc, schinfo.rq_node);
+        if(next_proc->state == RUNNABLE){
+            return next_proc;
+        }
+    }
+    return cpus[cpuid()].sched.idle;
 }
 
 static void update_this_proc(struct proc* p){
     // TODO: if using simple_sched, you should implement this routinue
     // update thisproc to the choosen process, and reset the clock interrupt if need
-
+    reset_clock(1000);
+    cpus[cpuid()].sched.cur_proc = p;
 }
 
 // A simple scheduler.
@@ -75,8 +125,7 @@ static void simple_sched(enum procstate new_state){
     update_this_proc(next);
     ASSERT(next->state == RUNNABLE);
     next->state = RUNNING;
-    if (next != this)
-    {
+    if (next != this){
         swtch(next->kcontext, &this->kcontext);
     }
     _release_sched_lock();
