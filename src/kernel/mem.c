@@ -19,9 +19,9 @@ static QueueNode* free_mem[MAX_ORDER];
 
 extern char end[];
 
-SpinLock* mem_list_lock;
+static SpinLock mem_list_lock;
 define_early_init(mem_list_lock){
-    init_spinlock(mem_list_lock);
+    init_spinlock(&mem_list_lock);
 }
 
 define_early_init(pages){
@@ -50,17 +50,22 @@ int __get_idx(i64 sz){
 
 // TODO: kalloc kfree
 void* kalloc(isize size){
+    //printk("in kalloc\n");
     setup_checker(ch_kalloc);
     size += 8;
     int idx = __get_idx(size);
     size = (idx+1)*MIN_BLOCK_SIZE;
     int pos = idx;
     void* ret = NULL;
-    acquire_spinlock(ch_kalloc, mem_list_lock);
+    
+    acquire_spinlock(ch_kalloc, &mem_list_lock);
+    //printk("pp\n");
     while(idx < MAX_ORDER && free_mem[idx] == NULL){
         ++idx;
+        
     }
     if(idx == MAX_ORDER){
+        //printk("1\n");
         void* new_page = kalloc_page();
         if(size < PAGE_SIZE){
             void* dst = new_page + size;
@@ -71,6 +76,7 @@ void* kalloc(isize size){
         ret = new_page + 8;
     }
     else{
+        //printk("2\n");
         void* new_addr = (void*)fetch_from_queue(&free_mem[idx]);
         int rest = (idx+1)*MIN_BLOCK_SIZE - size;
         if(rest != 0){
@@ -81,7 +87,7 @@ void* kalloc(isize size){
         *(i64*) new_addr = pos;
         ret = new_addr + 8;
     }
-    release_spinlock(ch_kalloc, mem_list_lock);
+    release_spinlock(ch_kalloc, &mem_list_lock);
     return ret;
 }
 

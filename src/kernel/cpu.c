@@ -10,7 +10,7 @@ struct cpu cpus[NCPU];
 
 static void cpu_clock_handler() {
     // TODO:?
-    printk("CPU%d: clock\n",cpuid());
+    //printk("CPU%d: clock\n",cpuid());
     reset_clock(1000);
     return;
 }
