@@ -3,6 +3,7 @@
 #include <kernel/mem.h>
 #include <kernel/sched.h>
 #include <common/list.h>
+
 #include <common/string.h>
 #include <kernel/printk.h>
 #define PID_MAX_DEFAULT 0x8000
@@ -122,7 +123,6 @@ NO_RETURN void exit(int code){
     struct proc* cp = thisproc();
     ASSERT(cp != &root_proc);
     cp->exitcode = code;
-    kfree_page(cp->kstack);
     
 
     acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
@@ -136,7 +136,7 @@ NO_RETURN void exit(int code){
             _insert_into_list(&(root_proc.children), &(child_proc->ptnode));
             if(is_zombie(child_proc)){
                 //TODO:
-                activate_proc(&root_proc);
+                //activate_proc(&root_proc);
                 post_sem(&(root_proc.childexit));
             }
             if(node->next == child_list){
@@ -148,14 +148,19 @@ NO_RETURN void exit(int code){
         }
     }
     ASSERT(_empty_list(child_list));
-    release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
-
+    
     post_sem(&(cp->parent->childexit)); //sequence is important! not sure
     
+
+    
+    
+        //printk("%d:%d ",cpuid(),thisproc()->pid);
     
     setup_checker(ch_sched);
     lock_for_sched(ch_sched);
+    release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     sched(ch_sched,ZOMBIE);
+    
 
     PANIC(); // prevent the warning of 'no_return function returns'
 }
@@ -189,12 +194,13 @@ int wait(int* exitcode){
             int pid_ret = child_proc->pid;
             *exitcode = child_proc->exitcode;
             free_pid(child_proc->pid);
+            kfree_page(child_proc->kstack);
             kfree((void*)child_proc);
             release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
             return pid_ret;
         }
     }
-    ASSERT(1);
+    PANIC();
     release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     return -1;
 }

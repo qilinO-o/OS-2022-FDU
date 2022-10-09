@@ -19,6 +19,7 @@ static Semaphore s1, s2, s3, s4, s5, s6;
 static void proc_test_1b(u64 a)
 {
     //printk("proc id: %d in proc_test_1b\n",thisproc()->pid);
+
     switch (a / 10 - 1)
     {
     case 0: break;
@@ -38,6 +39,7 @@ static void proc_test_1b(u64 a)
 
 static void proc_test_1a(u64 a)
 {
+
     //printk("proc id: %d in proc_test_1a\n",thisproc()->pid);
     for (int i = 0; i < 10; i++)
     {
@@ -106,6 +108,7 @@ static void proc_test_1a(u64 a)
 
 static void proc_test_1()
 {
+
     printk("proc_test_1\n");
     init_sem(&s1, 0);
     init_sem(&s2, 0);

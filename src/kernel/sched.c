@@ -112,7 +112,7 @@ static struct proc* pick_next(){
 static void update_this_proc(struct proc* p){
     // TODO: if using simple_sched, you should implement this routinue
     // update thisproc to the choosen process, and reset the clock interrupt if need
-    reset_clock(1000);
+    reset_clock(1);
     cpus[cpuid()].sched.cur_proc = p;
 }
 
