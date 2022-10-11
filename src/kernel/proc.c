@@ -45,6 +45,7 @@ void clear_bit(int offset, void* addr){
 int find_next_zero_bit(void* addr, int size, int offset){
     unsigned long *p;
     unsigned long mask;
+    int temp = offset - 1;
     while(offset < size){
         mask = 1UL << (offset & (sizeof(unsigned long) * 8 - 1));
         p = ((unsigned long*)addr) + (offset >> (sizeof(unsigned long) + 1));
@@ -64,6 +65,7 @@ int get_next_pid(){
         return -1;
     }
     offset = find_next_zero_bit(&pidmap.page, 32768, offset);
+    if(offset == 32768) offset = find_next_zero_bit(&pidmap.page, offset-1, 0);
     if((offset != 32768) && (!test_and_set_pid(offset, &pidmap.page))){
         --pidmap.nr_free;
         pid_base = offset;
