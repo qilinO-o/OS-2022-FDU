@@ -45,7 +45,7 @@ void clear_bit(int offset, void* addr){
 int find_next_zero_bit(void* addr, int size, int offset){
     unsigned long *p;
     unsigned long mask;
-    int temp = offset - 1;
+    //int temp = offset - 1;
     while(offset < size){
         mask = 1UL << (offset & (sizeof(unsigned long) * 8 - 1));
         p = ((unsigned long*)addr) + (offset >> (sizeof(unsigned long) + 1));
