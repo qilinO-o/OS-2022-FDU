@@ -240,8 +240,7 @@ int wait(int* exitcode){
     return -1;
 }
 
-int kill(int pid)
-{
+int kill(int pid){
     // TODO
     // Set the killed flag of the proc to true and return 0.
     // Return -1 if the pid is invalid (proc not found).
