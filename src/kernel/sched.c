@@ -33,6 +33,7 @@ static struct cfs_rq rq;
 
 static struct timer proc_timer[NCPU];
 static void proc_timer_handle(){
+    proc_timer[cpuid()].data = 0;
     setup_checker(tt);
     lock_for_sched(tt);
     sched(tt,RUNNABLE);
@@ -186,9 +187,14 @@ static void update_this_proc(struct proc* p){
     // update thisproc to the choosen process, and reset the clock interrupt if need
     //reset_clock(1000);
     cpus[cpuid()].sched.cur_proc = p;
+    if(proc_timer[cpuid()].data){
+        cancel_cpu_timer(&proc_timer[cpuid()]);
+        proc_timer[cpuid()].data = 0;
+    }
     proc_timer[cpuid()].elapse = MAX(sched_min_granularity, get_sched_latency() * p->schinfo.weight / rq.weight_sum);
     proc_timer[cpuid()].handler = proc_timer_handle;
     set_cpu_timer(&proc_timer[cpuid()]);
+    proc_timer[cpuid()].data = 1;
 }
 
 // A simple scheduler.
