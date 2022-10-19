@@ -113,7 +113,6 @@ void free_pid(int pid){
 
 define_early_init(pid_base){
     init_spinlock(&pid_base_lock);
-    pid_base = 0;
 }
 // int get_next_pid(){
 //     setup_checker(ch_pid_base_lock);
