@@ -306,6 +306,7 @@ void init_proc(struct proc* p){
     init_schinfo(&(p->schinfo));
     init_pgdir(&(p->pgdir));
     p->kstack = kalloc_page();
+    memset(p->kstack,0,PAGE_SIZE);
     ASSERT(p->kstack != NULL);
     p->ucontext = (UserContext*)(p->kstack + PAGE_SIZE - 16 - sizeof(UserContext));
     p->kcontext = (KernelContext*)(p->kstack + PAGE_SIZE - 16 - sizeof(UserContext) - sizeof(KernelContext));
