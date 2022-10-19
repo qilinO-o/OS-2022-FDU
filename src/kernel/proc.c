@@ -207,7 +207,10 @@ int wait(int* exitcode){
     }
     release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
 
-    wait_sem(&(cp->childexit));
+    bool wait_sig = wait_sem(&(cp->childexit));
+    if(wait_sig == false){
+        return -1;
+    }
     
     acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     _for_in_list(node, child_list){
