@@ -18,6 +18,8 @@ static Semaphore s1, s2, s3, s4, s5, s6;
 
 static void proc_test_1b(u64 a)
 {
+    //printk("proc id: %d in proc_test_1b\n",thisproc()->pid);
+
     switch (a / 10 - 1)
     {
     case 0: break;
@@ -37,12 +39,23 @@ static void proc_test_1b(u64 a)
 
 static void proc_test_1a(u64 a)
 {
+
+    //printk("proc id: %d in proc_test_1a\n",thisproc()->pid);
     for (int i = 0; i < 10; i++)
     {
         auto p = create_proc();
         set_parent_to_this(p);
         start_proc(p, proc_test_1b, a * 10 + i + 10);
     }
+    // if(thisproc()->pid == 4){
+    //         printk("/——————————————————————————\n");
+    //         _for_in_list(node ,&(thisproc()->children)){
+    //             if(node == &(thisproc()->children)) break;
+    //             struct proc* child_proc = container_of(node, struct proc, ptnode);
+    //             printk("%d ",child_proc->pid);
+    //         }
+    //         printk("\n/——————————————————————————\n");
+    //     }
     switch (a)
     {
     case 0: {
@@ -95,6 +108,7 @@ static void proc_test_1a(u64 a)
 
 static void proc_test_1()
 {
+
     printk("proc_test_1\n");
     init_sem(&s1, 0);
     init_sem(&s2, 0);
@@ -122,6 +136,7 @@ static void proc_test_1()
 void proc_test()
 {
     printk("proc_test\n");
+    printk("PID of proc_test is : %d\n",thisproc()->pid);
     auto p = create_proc();
     int pid = start_proc(p, proc_test_1, 0);
     int t = 0;
@@ -129,6 +144,7 @@ void proc_test()
     {
         int code;
         int id = wait(&code);
+        
         if (id == -1)
             break;
         if (id == pid)
