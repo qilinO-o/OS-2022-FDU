@@ -192,6 +192,9 @@ static void update_this_proc(struct proc* p){
         proc_timer[cpuid()].data = 0;
     }
     proc_timer[cpuid()].elapse = MAX(sched_min_granularity, get_sched_latency() * p->schinfo.weight / rq.weight_sum);
+    // if(p->idle){
+    //     proc_timer[cpuid()].elapse = 1;
+    // }
     proc_timer[cpuid()].handler = proc_timer_handle;
     set_cpu_timer(&proc_timer[cpuid()]);
     proc_timer[cpuid()].data = 1;

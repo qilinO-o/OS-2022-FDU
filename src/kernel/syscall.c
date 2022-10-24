@@ -16,8 +16,14 @@ void syscall_entry(UserContext* context){
     u64 x3 = context->reserved[3];
     u64 x4 = context->reserved[4];
     u64 x5 = context->reserved[5];
+    void* sys_func = syscall_table[id];
     if (id < NR_SYSCALL){
-        ret = ((u64(*)(u64,u64,u64,u64,u64,u64))(syscall_table[id]))(x0,x1,x2,x3,x4,x5);
-        context->reserved[0] = ret;
+        if(sys_func != NULL){
+            ret = ((u64(*)(u64,u64,u64,u64,u64,u64))(sys_func))(x0,x1,x2,x3,x4,x5);
+            context->reserved[0] = ret;
+        }
+        else{
+            PANIC();
+        }
     }
 }
