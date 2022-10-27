@@ -15,7 +15,7 @@ PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
     PTEntriesPtr pt1 = NULL;
     PTEntriesPtr pt2 = NULL;
     PTEntriesPtr pt3 = NULL;
-    PTEntry pa = NULL;
+    //PTEntry pa = NULL;
     if(pt0 == NULL){
         if(alloc){
             pgdir->pt = kalloc_page();
@@ -60,11 +60,11 @@ PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
             return NULL;
         }
     }
-    pa = (PTEntry)P2K(PTE_ADDRESS(pt3[VA_PART3(va)]));
+    //pa = (PTEntry)P2K(PTE_ADDRESS(pt3[VA_PART3(va)]));
     if(!(pt3[VA_PART3(va)] & PTE_VALID)){
         if(alloc){
-            pa = (PTEntry)(K2P(va) | PTE_TABLE);//TODO:
-            pt3[VA_PART3(va)] = pa;
+            // pa = (PTEntry)(K2P(va) | PTE_TABLE);
+            // pt3[VA_PART3(va)] = pa;
         }
         else{
             return NULL;
