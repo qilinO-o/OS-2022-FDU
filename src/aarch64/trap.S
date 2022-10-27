@@ -22,7 +22,6 @@ trap_entry:
     pushp(x2,x3)
     pushp(x0,x1)
     mrs x0, sp_el0
-    add x0, x0, #0x90
     mrs x1, ttbr0_el1
     pushp(x0,x1)
     mrs x0, spsr_el1

@@ -15,7 +15,7 @@ PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
     PTEntriesPtr pt1 = NULL;
     PTEntriesPtr pt2 = NULL;
     PTEntriesPtr pt3 = NULL;
-    PTEntry pa = NULL;
+    //PTEntry pa = NULL;
     if(pt0 == NULL){
         if(alloc){
             pgdir->pt = kalloc_page();
@@ -27,7 +27,7 @@ PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
     }
     pt0 = pgdir->pt;
     pt1 = (PTEntriesPtr)P2K(PTE_ADDRESS(pt0[VA_PART0(va)]));
-    if(pt0[VA_PART0(va)] == 0){
+    if(!(pt0[VA_PART0(va)] & PTE_VALID)){
         if(alloc){
             pt1 = kalloc_page();
             memset(pt1,0,PAGE_SIZE);
@@ -38,7 +38,7 @@ PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
         }
     }
     pt2 = (PTEntriesPtr)P2K(PTE_ADDRESS(pt1[VA_PART1(va)]));
-    if(pt1[VA_PART1(va)] == 0){
+    if(!(pt1[VA_PART1(va)] & PTE_VALID)){
         if(alloc){
             pt2 = kalloc_page();
             memset(pt2,0,PAGE_SIZE);
@@ -49,7 +49,7 @@ PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
         }
     }
     pt3 = (PTEntriesPtr)P2K(PTE_ADDRESS(pt2[VA_PART2(va)]));
-    if(pt2[VA_PART2(va)] == 0){
+    if(!(pt2[VA_PART2(va)] & PTE_VALID)){
         if(alloc){
             pt3 = kalloc_page();
             memset(pt3,0,PAGE_SIZE);
@@ -60,11 +60,11 @@ PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
             return NULL;
         }
     }
-    pa = (PTEntry)P2K(PTE_ADDRESS(pt3[VA_PART3(va)]));
-    if(pt3[VA_PART3(va)] == 0){
+    //pa = (PTEntry)P2K(PTE_ADDRESS(pt3[VA_PART3(va)]));
+    if(!(pt3[VA_PART3(va)] & PTE_VALID)){
         if(alloc){
-            pa = (PTEntry)(K2P(va) | PTE_TABLE);//TODO:
-            pt3[VA_PART3(va)] = pa;
+            // pa = (PTEntry)(K2P(va) | PTE_TABLE);
+            // pt3[VA_PART3(va)] = pa;
         }
         else{
             return NULL;
@@ -86,13 +86,13 @@ void free_pgdir(struct pgdir* pgdir){
         return;
     }
     for(int i=0;i<N_PTE_PER_TABLE;++i){
-        if(pt0[i]){
+        if(pt0[i] & PTE_VALID){
             PTEntriesPtr pt1 = (PTEntriesPtr)P2K(PTE_ADDRESS(pt0[i]));
             for(int j=0;j<N_PTE_PER_TABLE;++j){
-                if(pt1[j]){
+                if(pt1[j] & PTE_VALID){
                     PTEntriesPtr pt2 = (PTEntriesPtr)P2K(PTE_ADDRESS(pt1[j]));
                     for(int k=0;k<N_PTE_PER_TABLE;++k){
-                        if(pt2[k]){
+                        if(pt2[k] & PTE_VALID){
                             PTEntriesPtr pt3 = (PTEntriesPtr)P2K(PTE_ADDRESS(pt2[k]));
                             kfree_page((void*)pt3);
                         }
