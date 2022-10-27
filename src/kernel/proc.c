@@ -252,10 +252,12 @@ int kill(int pid){
     auto kill_node = _rb_lookup(&(dest.node),&(pid_proc_map.root),__pid_proc_cmp);
     _release_spinlock(&pid_proc_tree_lock);
     if(kill_node == NULL){
+        _release_spinlock(&proc_tree_lock);
         return -1;
     }
     struct proc* p = container_of(kill_node, struct pid_proc_rb_t, node)->proc;
     if(p->state == UNUSED){
+        _release_spinlock(&proc_tree_lock);
         return -1;
     }
     p->killed = true;
