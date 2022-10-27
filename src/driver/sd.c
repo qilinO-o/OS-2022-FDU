@@ -163,13 +163,15 @@ void sd_intr() {
         if (sdWaitForInterrupt(INT_READ_RDY)) {
             PANIC();
         }
+        arch_dsb_sy();
         while(done < 128)
             intbuf[done++] = *EMMC_DATA;
+        arch_dsb_sy();
         if (sdWaitForInterrupt(INT_DATA_DONE)) {
             PANIC();
         }
     }
-    this_buf->flags = 0;
+    this_buf->flags = B_VALID;
     post_sem(&this_buf->sd_sem);
     queue_lock(&buf_queue);
     queue_pop(&buf_queue);
@@ -202,8 +204,10 @@ void sdrw(buf* b) {
         queue_push(&buf_queue,&b->buf_node);
     }
     queue_unlock(&buf_queue);
-    if(!wait_sem(&b->sd_sem)){
-        PANIC();
+    while(b->flags != B_VALID){
+        if(!wait_sem(&b->sd_sem)){
+            PANIC();
+        }
     }
 }
 
