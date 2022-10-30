@@ -1,4 +1,3 @@
-
 #include <driver/sddef.h>
 
 /*
@@ -32,6 +31,7 @@ ALWAYS_INLINE u32 get_and_clear_EMMC_INTERRUPT() {
     return t;
 }
 
+static Queue buf_queue;
 /*
  * Initialize SD card and parse MBR.
  * 1. The first partition should be FAT and is used for booting.
@@ -56,6 +56,16 @@ void sd_init() {
      * 4.don't forget to call this function somewhere
      * TODO: Lab5 driver.
      */
+    sdInit();
+    queue_init(&buf_queue);
+    set_interrupt_handler(IRQ_SDIO,sd_intr);
+    set_interrupt_handler(IRQ_ARASANSDIO,sd_intr);
+    buf block_0;
+    memset(&block_0,0,sizeof(block_0));
+    sdrw(&block_0);
+    u32 LBA = *(u32*)((void*)block_0.data + 0x1CE + 0x8);
+    u32 N_sectors = *(u32*)((void*)block_0.data + 0x1CE + 0xC);
+    printk("LBA: %d N_sectors: %d\n",LBA,N_sectors);
 }
 
 /* Start the request for b. Caller must hold sdlock. */
@@ -136,6 +146,42 @@ void sd_intr() {
      *
      * TODO: Lab5 driver.
      */
+    queue_lock(&buf_queue);
+    ListNode* node = queue_front(&buf_queue);
+    queue_unlock(&buf_queue);
+    buf* this_buf = container_of(node, struct buf, buf_node);
+    int write = this_buf->flags & B_DIRTY;
+
+    int done = 0;
+    u32* intbuf = (u32*)this_buf->data;
+    if(write){
+        if (sdWaitForInterrupt(INT_DATA_DONE)) {
+            PANIC();
+        }
+    }
+    else{
+        if (sdWaitForInterrupt(INT_READ_RDY)) {
+            PANIC();
+        }
+        arch_dsb_sy();
+        while(done < 128)
+            intbuf[done++] = *EMMC_DATA;
+        arch_dsb_sy();
+        if (sdWaitForInterrupt(INT_DATA_DONE)) {
+            PANIC();
+        }
+    }
+    this_buf->flags = B_VALID;
+    post_sem(&this_buf->sd_sem);
+    queue_lock(&buf_queue);
+    queue_pop(&buf_queue);
+    if(!queue_empty(&buf_queue)){
+        queue_unlock(&buf_queue);
+        sd_start(container_of(queue_front(&buf_queue), struct buf, buf_node));
+    }
+    else{
+        queue_unlock(&buf_queue);
+    }
 }
 
 void sdrw(buf* b) {
@@ -148,6 +194,21 @@ void sdrw(buf* b) {
      * sd_start(), wait_sem() to complete this function.
      *  TODO: Lab5 driver.
      */
+    init_sem(&b->sd_sem,0);
+    queue_lock(&buf_queue);
+    if(queue_empty(&buf_queue)){
+        queue_push(&buf_queue,&b->buf_node);
+        sd_start(b);
+    }
+    else{
+        queue_push(&buf_queue,&b->buf_node);
+    }
+    queue_unlock(&buf_queue);
+    while(b->flags != B_VALID){
+        if(!wait_sem(&b->sd_sem)){
+            PANIC();
+        }
+    }
 }
 
 /* SD card test and benchmark. */
