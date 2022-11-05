@@ -32,6 +32,7 @@ ALWAYS_INLINE u32 get_and_clear_EMMC_INTERRUPT() {
 }
 
 static Queue buf_queue;
+static SpinLock sd_lock;
 /*
  * Initialize SD card and parse MBR.
  * 1. The first partition should be FAT and is used for booting.
@@ -58,6 +59,7 @@ void sd_init() {
      */
     sdInit();
     queue_init(&buf_queue);
+    init_spinlock(&sd_lock);
     set_interrupt_handler(IRQ_SDIO,sd_intr);
     set_interrupt_handler(IRQ_ARASANSDIO,sd_intr);
     buf block_0;
@@ -176,8 +178,10 @@ void sd_intr() {
     queue_lock(&buf_queue);
     queue_pop(&buf_queue);
     if(!queue_empty(&buf_queue)){
-        queue_unlock(&buf_queue);
+        queue_unlock(&buf_queue);   
+        _acquire_spinlock(&sd_lock);
         sd_start(container_of(queue_front(&buf_queue), struct buf, buf_node));
+        _release_spinlock(&sd_lock);
     }
     else{
         queue_unlock(&buf_queue);
@@ -198,7 +202,9 @@ void sdrw(buf* b) {
     queue_lock(&buf_queue);
     if(queue_empty(&buf_queue)){
         queue_push(&buf_queue,&b->buf_node);
+        _acquire_spinlock(&sd_lock);
         sd_start(b);
+        _release_spinlock(&sd_lock);
     }
     else{
         queue_push(&buf_queue,&b->buf_node);

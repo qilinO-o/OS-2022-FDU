@@ -34,7 +34,7 @@ void insert_pid_proc_map(struct proc* p){
     node->pid = p->pid;
     node->proc = p;
     _acquire_spinlock(&pid_proc_tree_lock);
-    _rb_insert(&(node->node), &(pid_proc_map.root), __pid_proc_cmp);
+    ASSERT(_rb_insert(&(node->node), &(pid_proc_map.root), __pid_proc_cmp) == 0);
     pid_proc_map.num++;
     _release_spinlock(&pid_proc_tree_lock);
 }
