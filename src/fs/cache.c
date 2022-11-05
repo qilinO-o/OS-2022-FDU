@@ -12,7 +12,6 @@ static SpinLock lock;     // protects block cache.
 static ListNode head;     // the list of all allocated in-memory block.
 static LogHeader header;  // in-memory copy of log header block.
 static usize cache_cnt;
-static Bitmap(bitmap,BLOCK_SIZE); //per bitmap block
 
 // hint: you may need some other variables. Just add them here.
 struct LOG {
@@ -65,6 +64,22 @@ static usize get_num_cached_blocks() {
 }
 
 // see `cache.h`.
+//caller should acquire lock of cache list
+void LRU_shrink(){
+    Block* cached_block = NULL;
+    ListNode* p = head.prev;
+    while(get_num_cached_blocks() >= EVICTION_THRESHOLD && p != &head){
+        cached_block = container_of(p,Block,node);
+        if(!cached_block->pinned && !cached_block->acquired){
+            p = _detach_from_list(p);
+            kfree(cached_block);
+            --cache_cnt;
+        }
+        else{
+            p = p->prev;
+        }
+    }
+}
 static Block* cache_acquire(usize block_no) {
     // TODO
     bool if_back = false;
@@ -111,23 +126,6 @@ __back:
     return cached_block;
 }
 
-//caller should acquire lock of cache list
-void LRU_shrink(){
-    Block* cached_block = NULL;
-    ListNode* p = head.prev;
-    while(get_num_cached_blocks() >= EVICTION_THRESHOLD && p != &head){
-        cached_block = container_of(p,Block,node);
-        if(!cached_block->pinned && !cached_block->acquired){
-            p = _detach_from_list(p);
-            kfree(cached_block);
-            --cache_cnt;
-        }
-        else{
-            p = p->prev;
-        }
-    }
-}
-
 // see `cache.h`.
 static void cache_release(Block* block) {
     // TODO
@@ -139,7 +137,7 @@ static void cache_release(Block* block) {
 
 void recover_from_log(){
     read_header();
-    for(int i=0;i<header.num_blocks;++i){
+    for(usize i=0;i<header.num_blocks;++i){
         Block temp;
         temp.block_no = sblock->log_start + i + 1;
         device_read(&temp);
@@ -228,7 +226,7 @@ static void cache_sync(OpContext* ctx, Block* block) {
 }
 
 void write_block_to_log(){
-    for(int i=0;i<header.num_blocks;++i){
+    for(usize i=0;i<header.num_blocks;++i){
         Block* b_op = cache_acquire(header.block_no[i]);
         //ASSERT(sblock->log_start + 1 + i < sblock->num_blocks);
         device->write(sblock->log_start + 1 + i, &(b_op->data));
@@ -238,7 +236,7 @@ void write_block_to_log(){
 }
 void persist_from_log(){
     u8 data[BLOCK_SIZE];
-    for(int i=0;i<header.num_blocks;++i){
+    for(usize i=0;i<header.num_blocks;++i){
         device->read(sblock->log_start + 1 + i, &data);
         Block* b_op = cache_acquire(header.block_no[i]);
         memmove(&(b_op->data), &data, BLOCK_SIZE);
