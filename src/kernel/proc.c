@@ -261,7 +261,7 @@ int kill(int pid){
         return -1;
     }
     p->killed = true;
-    activate_proc(p);
+    alert_proc(p);
     _release_spinlock(&proc_tree_lock);
     return 0;
 }

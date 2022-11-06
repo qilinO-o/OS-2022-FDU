@@ -23,7 +23,10 @@ static const int prio_to_weight[40]={
 };
 bool cfs_cmp(rb_node lnode,rb_node rnode){
     if(container_of(lnode,struct schinfo,node)->vruntime == container_of(rnode,struct schinfo,node)->vruntime){
-        return container_of(lnode,struct proc,schinfo.node)->pid < container_of(rnode,struct proc,schinfo.node)->pid;
+        if(container_of(lnode,struct schinfo,node)->prio == container_of(rnode,struct schinfo,node)->prio){
+            return container_of(lnode,struct proc,schinfo.node)->pid < container_of(rnode,struct proc,schinfo.node)->pid;
+        }
+        return container_of(lnode,struct schinfo,node)->prio < container_of(rnode,struct schinfo,node)->prio;
     }
     return container_of(lnode,struct schinfo,node)->vruntime < container_of(rnode,struct schinfo,node)->vruntime;
 }
@@ -130,14 +133,14 @@ bool _activate_proc(struct proc* p, bool onalert)
     // if the proc->state if SLEEPING/UNUSED, set the process state to RUNNABLE and add it to the sched queue
     // else: panic
     _acquire_sched_lock();
-    if(p->state == RUNNING || p->state == RUNNABLE){
+    if(p->state == RUNNING || p->state == RUNNABLE || (p->state == DEEPSLEEPING && onalert)){
         _release_sched_lock();
         return false;
     }
-    else if(p->state == SLEEPING || p->state == UNUSED){
+    else if(p->state == SLEEPING || p->state == UNUSED || (p->state == DEEPSLEEPING && !onalert)){
         p->state = RUNNABLE;
         p->schinfo.vruntime = MAX(p->schinfo.vruntime,get_minvruntime());
-        _rb_insert(&(p->schinfo.node),&(rq.root),cfs_cmp);
+        ASSERT(_rb_insert(&(p->schinfo.node),&(rq.root),cfs_cmp) == 0);
         rq.weight_sum += p->schinfo.weight;
         rq.nr_running++;
     }
@@ -157,7 +160,7 @@ static void update_this_state(enum procstate new_state){
     cp->state = new_state;
     cp->schinfo.vruntime += (get_timestamp_ms() - cp->schinfo.starttime) * prio_to_weight[21] / cp->schinfo.weight;
     if(new_state == RUNNABLE && !cp->idle){
-        _rb_insert(&(cp->schinfo.node),&(rq.root),cfs_cmp);
+        ASSERT(_rb_insert(&(cp->schinfo.node),&(rq.root),cfs_cmp) == 0);
     }
     else if(!cp->idle){
         rq.weight_sum -= cp->schinfo.weight;
