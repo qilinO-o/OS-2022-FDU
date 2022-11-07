@@ -261,6 +261,8 @@ int kill(int pid){
         return -1;
     }
     p->killed = true;
+    p->schinfo.prio = 0;
+    p->schinfo.weight = 88761;
     alert_proc(p);
     _release_spinlock(&proc_tree_lock);
     return 0;

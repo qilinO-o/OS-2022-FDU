@@ -99,7 +99,7 @@ __back:
     if(hit){
         if(cached_block->acquired){
             _release_spinlock(&lock);
-            ASSERT(wait_sem(&(cached_block->lock))); //_acquire_sleeplock(&cached_block->lock);
+            unalertable_wait_sem(&(cached_block->lock)); //_acquire_sleeplock(&cached_block->lock);
             if_back = true;
             goto __back; //ensure the cached_block is still there after sleep
         }
@@ -175,13 +175,13 @@ static void cache_begin_op(OpContext* ctx) {
         if(log.committing){
             _lock_sem(&(log.log_sem));
             _release_spinlock(&(log.log_lock));
-            ASSERT(_wait_sem(&(log.log_sem), true));
+            ASSERT(_wait_sem(&(log.log_sem), false));
             _acquire_spinlock(&(log.log_lock));
         }
         else if(log.log_used + (int)header.num_blocks + OP_MAX_NUM_BLOCKS > log.max_size){
             _lock_sem(&(log.log_sem));
             _release_spinlock(&(log.log_lock));
-            ASSERT(_wait_sem(&(log.log_sem), true));
+            ASSERT(_wait_sem(&(log.log_sem), false));
             _acquire_spinlock(&(log.log_lock));
         }
         else{
@@ -276,7 +276,7 @@ static void cache_end_op(OpContext* ctx) {
         post_all_sem(&(log.log_sem));
         _lock_sem(&(log.log_commit_sem));
         _release_spinlock(&(log.log_lock));
-        ASSERT(_wait_sem(&(log.log_commit_sem), true));
+        ASSERT(_wait_sem(&(log.log_commit_sem), false));
     }
 }
 
