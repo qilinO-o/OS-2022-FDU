@@ -32,3 +32,10 @@ struct cfs_rq{
     unsigned int nr_running;
     struct rb_root_ root;
 };
+
+// embedded data for containers
+struct schqueue
+{
+    // TODO: customize your sched queue
+    
+};

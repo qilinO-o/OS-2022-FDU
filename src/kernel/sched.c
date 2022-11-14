@@ -44,6 +44,9 @@ static void proc_timer_handle(){
 
 static const u64 sched_min_granularity = 1;
 static const u64 sched_latency = 6;
+void init_schinfo(struct schinfo* p, bool group)
+{
+    // TODO: initialize your customized schinfo for every newly-created process
 
 static u64 get_minvruntime(){
     auto node = _rb_first(&(rq.root));
@@ -153,8 +156,15 @@ bool _activate_proc(struct proc* p, bool onalert)
     return true;
 }
 
-static void update_this_state(enum procstate new_state){
-    // TODO: if using simple_sched, you should implement this routine
+void activate_group(struct container* group)
+{
+    // TODO: add the schinfo node of the group to the schqueue of its parent
+
+}
+
+static void update_this_state(enum procstate new_state)
+{
+    // TODO: if using simple_sched, you should implement this routinue
     // update the state of current process to new_state, and remove it from the sched queue if new_state=SLEEPING/ZOMBIE
     struct proc* cp = thisproc();
     cp->state = new_state;
