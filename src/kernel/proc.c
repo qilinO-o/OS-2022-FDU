@@ -7,11 +7,13 @@
 #include <common/rbtree.h>
 #include <common/string.h>
 #include <kernel/printk.h>
-#define PID_MAX_DEFAULT 0x8000
 
 struct proc root_proc;
+extern struct container root_container;
 
 static SpinLock pid_proc_tree_lock;
+
+/***************** pid - proc map ********************/
 struct pid_proc_rb_t{
     u64 pid;
     struct proc* proc;
@@ -29,7 +31,7 @@ define_early_init(pid_proc_map){
 static bool __pid_proc_cmp(rb_node lnode, rb_node rnode){
     return container_of(lnode, struct pid_proc_rb_t, node)->pid < container_of(rnode, struct pid_proc_rb_t, node)->pid;
 }
-void insert_pid_proc_map(struct proc* p){
+static void insert_pid_proc_map(struct proc* p){
     struct pid_proc_rb_t* node = kalloc(sizeof(struct pid_proc_rb_t));
     node->pid = p->pid;
     node->proc = p;
@@ -38,6 +40,7 @@ void insert_pid_proc_map(struct proc* p){
     pid_proc_map.num++;
     _release_spinlock(&pid_proc_tree_lock);
 }
+/***************** pid - proc map ********************/
 
 void kernel_entry();
 void proc_entry();
@@ -47,82 +50,19 @@ define_early_init(proc_tree){
     init_spinlock(&proc_tree_lock);
 }
 
-/* var of pid and functions to allocate pid */
-static int pid_base = -1;
-static SpinLock pid_base_lock;
+/************ var of pid and functions to allocate pid ************/
+static pidmap_t global_pidmap;
+static BitmapCell page[PID_MAX_DEFAULT/8];
 
-typedef struct pidmap{
-    unsigned int nr_free;
-    i8 page[PID_MAX_DEFAULT/8];
-} pidmap_t;
-
-static pidmap_t pidmap = {PID_MAX_DEFAULT, {'0'}};
-
-int test_and_set_pid(int offset, void* addr){
-    unsigned long mask = 1UL << (offset & (sizeof(unsigned long) * 8 - 1));
-    unsigned long* p = ((unsigned long*)addr) + (offset >> (sizeof(unsigned long) + 1));
-    unsigned long old = *p;
-    *p = old | mask;
-    return (old & mask) != 0;
+define_early_init(global_pidmap){
+    global_pidmap.pid_namespace_size = PID_MAX_DEFAULT;
+    global_pidmap.nr_free = PID_MAX_DEFAULT;
+    global_pidmap.pid_base = -1;
+    init_spinlock(&global_pidmap.pid_base_lock);
+    memset(page,0,sizeof(page));
+    global_pidmap.page = page;
 }
-void clear_bit(int offset, void* addr){
-    unsigned long mask = 1UL << (offset & (sizeof(unsigned long) * 8 - 1));
-    unsigned long* p = ((unsigned long*)addr) + (offset >> (sizeof(unsigned long) + 1));
-    unsigned long old = *p;
-    *p = old & ~mask;
-}
-int find_next_zero_bit(void* addr, int size, int offset){
-    unsigned long *p;
-    unsigned long mask;
-    while(offset < size){
-        mask = 1UL << (offset & (sizeof(unsigned long) * 8 - 1));
-        p = ((unsigned long*)addr) + (offset >> (sizeof(unsigned long) + 1));
-        if((~(*p) & mask)){
-            break;
-        }
-        ++offset;
-    }
-    return offset;
-}
-int get_next_pid(){
-    _acquire_spinlock(&pid_base_lock);
-    int pid = pid_base + 1;
-    int offset = pid & 32767;
-    if(pidmap.nr_free == 0){
-        _release_spinlock(&pid_base_lock);
-        return -1;
-    }
-    offset = find_next_zero_bit(&pidmap.page, 32768, offset);
-    if(offset == 32768) offset = find_next_zero_bit(&pidmap.page, offset-1, 0);
-    if((offset != 32768) && (!test_and_set_pid(offset, &pidmap.page))){
-        --pidmap.nr_free;
-        pid_base = offset;
-        _release_spinlock(&pid_base_lock);
-        return offset;
-    }
-    _release_spinlock(&pid_base_lock);
-    return -1;
-}
-void free_pid(int pid){
-    _acquire_spinlock(&pid_base_lock);
-    int offset = pid & 32767;
-    ++pidmap.nr_free;
-    clear_bit(offset, &pidmap.page);
-    _release_spinlock(&pid_base_lock);
-}
-
-define_early_init(pid_base){
-    init_spinlock(&pid_base_lock);
-}
-// int get_next_pid(){
-//     setup_checker(ch_pid_base_lock);
-//     acquire_spinlock(ch_pid_base_lock, &pid_base_lock);
-//     pid_base += 1;
-//     release_spinlock(ch_pid_base_lock, &pid_base_lock);
-//     return pid_base;
-// }
-
-/* pid section enc */
+/************ var of pid and functions to allocate pid ************/
 
 
 void set_parent_to_this(struct proc* proc){
@@ -147,10 +87,9 @@ NO_RETURN void exit(int code){
     // 4. notify the parent
     // 5. sched(ZOMBIE)
     // NOTE: be careful of concurrency
-    //printk("%d in exit\n",thisproc()->pid);
     setup_checker(ch_proc_tree_lock);
     struct proc* cp = thisproc();
-    ASSERT(cp != &root_proc);
+    ASSERT(cp != cp->container->rootproc && !cp->idle);
     cp->exitcode = code;
     free_pgdir(&(cp->pgdir));
 
@@ -160,13 +99,13 @@ NO_RETURN void exit(int code){
         for(struct ListNode* node = child_list->next;;){
             struct proc* child_proc = container_of(node, struct proc, ptnode);
             ASSERT(child_proc->parent == cp);
-            child_proc->parent = &root_proc;
+            child_proc->parent = cp->container->rootproc;
             node = _detach_from_list(node);
-            _insert_into_list(&(root_proc.children), &(child_proc->ptnode));
+            _insert_into_list(&(cp->container->rootproc->children), &(child_proc->ptnode));
             if(is_zombie(child_proc)){
                 //TODO:
                 //activate_proc(&root_proc);
-                post_sem(&(root_proc.childexit));
+                post_sem(&(cp->container->rootproc->childexit));
             }
             if(node->next == child_list){
                 break;
@@ -179,7 +118,6 @@ NO_RETURN void exit(int code){
     ASSERT(_empty_list(child_list));
     
     post_sem(&(cp->parent->childexit)); //sequence is important! not sure
-        //printk("%d:%d ",cpuid(),thisproc()->pid);
     
     setup_checker(ch_sched);
     lock_for_sched(ch_sched);
@@ -197,7 +135,6 @@ int wait(int* exitcode, int* pid)
     // 2. wait for childexit
     // 3. if any child exits, clean it up and return its local pid and exitcode
     // NOTE: be careful of concurrency
-    //printk("proc %d in wait\n",thisproc()->pid);
     setup_checker(ch_proc_tree_lock);
     struct proc* cp = thisproc();
     ListNode* child_list = &(cp->children);
@@ -220,7 +157,8 @@ int wait(int* exitcode, int* pid)
             ASSERT(child_proc->parent == cp);
             _detach_from_list(node);
             child_proc->state = UNUSED;
-            int pid_ret = child_proc->pid;
+            int pid_global = child_proc->pid;
+            int pid_local = child_proc->localpid;
             *exitcode = child_proc->exitcode;
             
             _acquire_spinlock(&pid_proc_tree_lock);
@@ -231,11 +169,13 @@ int wait(int* exitcode, int* pid)
             pid_proc_map.num--;
             _release_spinlock(&pid_proc_tree_lock);
             
-            free_pid(child_proc->pid);
+            free_pid(&global_pidmap, child_proc->pid);
+            free_pid(&(child_proc->container->pidmap), child_proc->localpid);
             kfree_page(child_proc->kstack);
             kfree((void*)child_proc);
             release_spinlock(ch_proc_tree_lock, &proc_tree_lock);
-            return pid_ret;
+            *pid = pid_global;
+            return pid_local;
         }
     }
     PANIC();
@@ -289,7 +229,8 @@ int start_proc(struct proc* p, void(*entry)(u64), u64 arg)
     p->kcontext->x0 = (u64)entry;
     p->kcontext->x1 = (u64)arg;
 
-    int pid_ret = p->pid;
+    p->localpid = get_next_pid(&(p->container->pidmap));
+    int pid_ret = p->localpid;
     activate_proc(p);
     return pid_ret;
 }
@@ -300,7 +241,7 @@ void init_proc(struct proc* p){
     // NOTE: be careful of concurrency
     p->killed = false;
     p->idle = false;
-    p->pid = get_next_pid();
+    p->pid = get_next_pid(&global_pidmap);
     insert_pid_proc_map(p);
     p->exitcode = 0;
     p->state = UNUSED;
@@ -308,21 +249,19 @@ void init_proc(struct proc* p){
     init_list_node(&(p->children));
     init_list_node(&(p->ptnode));
     p->parent = NULL;
-    init_schinfo(&(p->schinfo));
+    init_schinfo(&(p->schinfo), false);
     init_pgdir(&(p->pgdir));
     p->kstack = kalloc_page();
     memset(p->kstack,0,PAGE_SIZE);
     ASSERT(p->kstack != NULL);
     p->ucontext = (UserContext*)(p->kstack + PAGE_SIZE - 16 - sizeof(UserContext));
     p->kcontext = (KernelContext*)(p->kstack + PAGE_SIZE - 16 - sizeof(UserContext) - sizeof(KernelContext));
+    p->container = &root_container;
 }
 
 struct proc* create_proc(){
-    //printk("in_creat_proc\n");
     struct proc* p = kalloc(sizeof(struct proc));
-    //printk("finish_kalloc_for_proc\n");
     init_proc(p);
-    //printk("finish_init_proc\n");
     return p;
 }
 

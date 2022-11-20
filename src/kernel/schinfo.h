@@ -24,7 +24,8 @@ struct schinfo
     int weight;
     //int slice;
     struct rb_node_ node;
-    struct cfs_rq* rq;
+    //struct schqueue* sq;
+    bool is_container;
 };
 
 struct cfs_rq{
@@ -37,5 +38,5 @@ struct cfs_rq{
 struct schqueue
 {
     // TODO: customize your sched queue
-    
+    struct cfs_rq rq;
 };
