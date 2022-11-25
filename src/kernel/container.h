@@ -2,6 +2,7 @@
 
 #include <kernel/proc.h>
 #include <kernel/schinfo.h>
+#include <kernel/pidmap.h>
 
 struct container
 {
@@ -12,7 +13,7 @@ struct container
     struct schqueue schqueue;
 
     // TODO: namespace (local pid?)
-
+    pidmap_t pidmap;
 };
 
 struct container* create_container(void (*root_entry)(), u64 arg);
