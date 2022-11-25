@@ -266,11 +266,11 @@ static void cache_end_op(OpContext* ctx) {
     
     if(log.outstanding == 0){
         log.committing = true;
+        _release_spinlock(&(log.log_lock));
         checkpoint();
         log.committing = false;
         post_all_sem(&(log.log_commit_sem));
-        post_all_sem(&(log.log_sem));
-        _release_spinlock(&(log.log_lock));
+        post_all_sem(&(log.log_sem));    
     }
     else{
         post_all_sem(&(log.log_sem));
