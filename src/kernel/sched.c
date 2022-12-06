@@ -290,6 +290,7 @@ static void simple_sched(enum procstate new_state){
     next->state = RUNNING;
     next->schinfo.starttime = get_timestamp_ms();
     if (next != this){
+        attach_pgdir(&(next->pgdir));
         swtch(next->kcontext, &this->kcontext);
     }
     _release_sched_lock();

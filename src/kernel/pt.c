@@ -5,6 +5,7 @@
 
 #include <driver/memlayout.h>
 #include <kernel/printk.h>
+#include <kernel/paging.h>
 
 PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
     // TODO
@@ -56,31 +57,36 @@ PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
             pt2[VA_PART2(va)] = K2P(pt3) | PTE_TABLE;
         }
         else{
-
             return NULL;
         }
     }
     //pa = (PTEntry)P2K(PTE_ADDRESS(pt3[VA_PART3(va)]));
-    if(!(pt3[VA_PART3(va)] & PTE_VALID)){
-        if(alloc){
-            // pa = (PTEntry)(K2P(va) | PTE_TABLE);
-            // pt3[VA_PART3(va)] = pa;
-        }
-        else{
-            return NULL;
-        }
-    }
+    // if(!(pt3[VA_PART3(va)] & PTE_VALID)){
+    //     if(alloc){
+    //         // pa = (PTEntry)(K2P(va) | PTE_TABLE);
+    //         // pt3[VA_PART3(va)] = pa;
+    //     }
+    //     else{
+    //         return NULL;
+    //     }
+    // }
     return &(pt3[VA_PART3(va)]);
 }
 
 void init_pgdir(struct pgdir* pgdir){
-    pgdir->pt = NULL;
+    pgdir->online = false;
+    init_spinlock(&(pgdir->lock));
+    void* p = kalloc_page();
+    memset(p,0,PAGE_SIZE);
+    pgdir->pt = (PTEntriesPtr)p;
+    init_sections(&(pgdir->section_head));
 }
 
 void free_pgdir(struct pgdir* pgdir){
     // TODO
     // Free pages used by the page table. If pgdir->pt=NULL, do nothing.
     // DONT FREE PAGES DESCRIBED BY THE PAGE TABLE
+    free_sections(pgdir);
     PTEntriesPtr pt0 = pgdir->pt;
     if(pt0 == NULL){
         return;
@@ -109,11 +115,27 @@ void free_pgdir(struct pgdir* pgdir){
 
 void attach_pgdir(struct pgdir* pgdir){
     extern PTEntries invalid_pt;
-    if (pgdir->pt)
+    struct pgdir* original_pgdir = (struct pgdir*)(P2K(arch_get_ttbr0()));
+    if(original_pgdir != NULL){
+        _acquire_spinlock(&(original_pgdir->lock));
+        original_pgdir->online = 0;
+        _release_spinlock(&(original_pgdir->lock));
+    }
+    if (pgdir->pt){
+        _acquire_spinlock(&(pgdir->lock));
+        pgdir->online = 1;
+        _release_spinlock(&(pgdir->lock));
         arch_set_ttbr0(K2P(pgdir->pt));
-    else
+    }
+    else{
         arch_set_ttbr0(K2P(&invalid_pt));
+    }
+    arch_tlbi_vmalle1is();
 }
 
-
+void vmmap(struct pgdir* pd, u64 va, void* ka, u64 flags){
+    PTEntriesPtr ptentry_ptr = get_pte(pd, va, true);
+    *ptentry_ptr = K2P(ka);
+    *ptentry_ptr |= flags;
+}
 

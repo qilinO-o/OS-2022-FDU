@@ -22,7 +22,7 @@ trap_entry:
     pushp(x2,x3)
     pushp(x0,x1)
     mrs x0, sp_el0
-    mrs x1, ttbr0_el1
+    //mrs x1, ttbr0_el1
     pushp(x0,x1)
     mrs x0, spsr_el1
     mrs x1, elr_el1
@@ -40,7 +40,7 @@ trap_return:
     msr elr_el1, x1
     popp(x0,x1)
     msr sp_el0, x0
-    msr ttbr0_el1, x1
+    //msr ttbr0_el1, x1
     popp(x0,x1)
     popp(x2,x3)
     popp(x4,x5)

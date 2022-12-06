@@ -12,6 +12,7 @@ static SpinLock lock;     // protects block cache.
 static ListNode head;     // the list of all allocated in-memory block.
 static LogHeader header;  // in-memory copy of log header block.
 static usize cache_cnt;
+static u8 swap_bitmap[(SWAP_END - SWAP_START)/8];
 
 // hint: you may need some other variables. Just add them here.
 struct LOG {
@@ -165,6 +166,7 @@ void init_bcache(const SuperBlock* _sblock, const BlockDevice* _device) {
     log.committing = false;
     log.outstanding = 0;
     recover_from_log();
+    memset(swap_bitmap,0,(SWAP_END - SWAP_START)/8);
 }
 
 // see `cache.h`.
@@ -229,7 +231,7 @@ void write_block_to_log(){
     for(usize i=0;i<header.num_blocks;++i){
         Block* b_op = cache_acquire(header.block_no[i]);
         //ASSERT(sblock->log_start + 1 + i < sblock->num_blocks);
-        device->write(sblock->log_start + 1 + i, &(b_op->data));
+        device->write(sblock->log_start + 1 + i, b_op->data);
         b_op->pinned = false;
         cache_release(b_op);
     }
@@ -237,7 +239,7 @@ void write_block_to_log(){
 void persist_from_log(){
     u8 data[BLOCK_SIZE];
     for(usize i=0;i<header.num_blocks;++i){
-        device->read(sblock->log_start + 1 + i, &data);
+        device->read(sblock->log_start + 1 + i, data);
         Block* b_op = cache_acquire(header.block_no[i]);
         memmove(&(b_op->data), &data, BLOCK_SIZE);
         //ASSERT(b_op->block_no < sblock->num_blocks);
@@ -285,11 +287,11 @@ static void cache_end_op(OpContext* ctx) {
 static usize cache_alloc(OpContext* ctx) {
     // TODO
     Block* bitmap_block = NULL;
-    for(usize index = 0; index < sblock->num_blocks; index += BIT_PER_BLOCK){
+    for(usize index = 0; index < sblock->num_blocks - SWAP_SIZE; index += BIT_PER_BLOCK){
         usize bitmap_block_no = index / BIT_PER_BLOCK + sblock->bitmap_start;
         bitmap_block = cache_acquire(bitmap_block_no);
         BitmapCell* bitmap = (BitmapCell*)(bitmap_block->data);
-        for(int i=0;i<BIT_PER_BLOCK && index+i<sblock->num_blocks;++i){
+        for(int i=0;i<BIT_PER_BLOCK && index+i<sblock->num_blocks - SWAP_SIZE;++i){
             bool if_valid = bitmap_get(bitmap, i);
             if(if_valid == 0){
                 bitmap_set(bitmap, i);
@@ -336,3 +338,35 @@ BlockCache bcache = {
     .alloc = cache_alloc,
     .free = cache_free,
 };
+
+void release_8_blocks(u32 bno){
+    BitmapCell* bitmap = (BitmapCell*)(swap_bitmap);
+    for(u32 i=bno; i<bno+8; ++i){
+        bitmap_clear(bitmap, i-SWAP_START);
+    }
+}
+
+u32 find_and_set_8_blocks(){
+    int cnt = 0;
+    u32 ret = 0;
+    BitmapCell* bitmap = (BitmapCell*)(swap_bitmap);
+    for(u32 i=SWAP_START; i<SWAP_END; ++i){
+        if(bitmap_get(bitmap,i-SWAP_START) == 0){
+            if(cnt == 0){
+                ret = i;
+            }
+            cnt++;
+        }
+        else{
+            cnt = 0;
+        }
+        if(cnt == 8){
+            for(u32 j=ret;j<ret+8;++j){
+                bitmap_set(bitmap, j-SWAP_START);
+            }
+            return ret;
+        }
+    }
+    PANIC();
+    return 0;
+}

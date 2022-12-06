@@ -7,6 +7,7 @@
 #include <common/rbtree.h>
 #include <common/string.h>
 #include <kernel/printk.h>
+#include <kernel/paging.h>
 
 struct proc root_proc;
 extern struct container root_container;
@@ -91,6 +92,7 @@ NO_RETURN void exit(int code){
     struct proc* cp = thisproc();
     ASSERT(cp != cp->container->rootproc && !cp->idle);
     cp->exitcode = code;
+    free_sections(&(cp->pgdir));
     free_pgdir(&(cp->pgdir));
 
     acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
@@ -152,6 +154,7 @@ int wait(int* exitcode, int* pid)
     
     acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     _for_in_list(node, child_list){
+        if(node == child_list) break;
         struct proc* child_proc = container_of(node, struct proc, ptnode);
         if(is_zombie(child_proc)){
             ASSERT(child_proc->parent == cp);
@@ -269,4 +272,26 @@ define_init(root_proc){
     init_proc(&root_proc);
     root_proc.parent = &root_proc;
     start_proc(&root_proc, kernel_entry, 123456);
+}
+
+struct proc* _get_offline_proc(struct proc* this_proc){
+    _acquire_spinlock(&(this_proc->pgdir.lock));
+    if(!(this_proc->pgdir.online)){
+        return this_proc;
+    }
+    else{
+        _release_spinlock(&(this_proc->pgdir.lock));
+        _for_in_list(node, &(this_proc->children)){
+            if(node == &(this_proc->children)) break;
+            struct proc* child = container_of(node, struct proc, ptnode);
+            struct proc* ret = _get_offline_proc(child);
+            if(ret != NULL){
+                return ret;
+            }
+        }
+        return NULL;
+    }
+}
+struct proc* get_offline_proc(){
+    return _get_offline_proc(&root_proc);
 }

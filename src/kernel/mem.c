@@ -4,10 +4,15 @@
 #include <common/list.h>
 #include <driver/memlayout.h>
 #include <kernel/printk.h>
+#include <fs/cache.h>
+#include <common/string.h>
 
 RefCount alloc_page_cnt;
+RefCount _left_page_cnt;
 #define MIN_BLOCK_SIZE 8 
 #define MIN_BLOCK_ORDER 3 // log2(MIN_BLOCK_SIZE)
+#define PAGES_REF_SIZE (sizeof(struct page))*(PHYSTOP/PAGE_SIZE)
+#define PAGES_REF_PAGE_NUM  PAGES_REF_SIZE/PAGE_SIZE
 #define MAX_ORDER PAGE_SIZE/MIN_BLOCK_SIZE // 4096 / MIN_BLOCK_SIZE
 #define CORE_NUM 4
 define_early_init(alloc_page_cnt){
@@ -16,6 +21,8 @@ define_early_init(alloc_page_cnt){
 
 static QueueNode* pages;
 static QueueNode* free_mem[MAX_ORDER];
+static void* zero_page_ptr;
+static struct page* pages_ref;
 
 extern char end[];
 
@@ -25,23 +32,42 @@ define_early_init(mem_list_lock){
 }
 
 define_early_init(pages){
-    for (u64 p = PAGE_BASE((u64)&end) + PAGE_SIZE; p < P2K(PHYSTOP); p += PAGE_SIZE){
+    init_rc(&_left_page_cnt);
+    zero_page_ptr = NULL;
+    pages_ref = (struct page*)(P2K(PHYSTOP)-PAGES_REF_SIZE);
+    for (u64 p = PAGE_BASE((u64)&end) + PAGE_SIZE ; p < P2K(PHYSTOP)-PAGES_REF_SIZE; p += PAGE_SIZE){
         add_to_queue(&pages, (QueueNode*)p); 
+        _increment_rc(&_left_page_cnt);
     }
+}
+
+define_init(zero_page){
+    zero_page_ptr = kalloc_page();
+    memset(zero_page_ptr,0,PAGE_SIZE);
 }
 
 void* kalloc_page(){
     _increment_rc(&alloc_page_cnt);
     // TODO
-    //static int cnt =0;
-    //printk("!%d\n",cnt++);
-    return fetch_from_queue(&pages);
+    _decrement_rc(&_left_page_cnt);
+    void* ret = fetch_from_queue(&pages);
+    u64 page_num = ((u64)K2P(ret))/PAGE_SIZE;
+    pages_ref[page_num].ref.count = 1;
+    init_spinlock(&(pages_ref[page_num].ref_lock));
+    return ret;
 }
 
 void kfree_page(void* p){
     _decrement_rc(&alloc_page_cnt);
     // TODO
-    add_to_queue(&pages, (QueueNode*)p);
+    u64 page_num = ((u64)p-(PAGE_BASE((u64)&end) + PAGE_SIZE))/PAGE_SIZE;
+    _acquire_spinlock(&(pages_ref[page_num].ref_lock));
+    _decrement_rc(&(pages_ref[page_num].ref));
+    if(pages_ref[page_num].ref.count == 0){
+        add_to_queue(&pages, (QueueNode*)p);
+        _increment_rc(&_left_page_cnt);
+    }
+    _release_spinlock(&(pages_ref[page_num].ref_lock));
 }
 
 int __get_idx(i64 sz){
@@ -102,4 +128,43 @@ void kfree(void* p){
     else{
         add_to_queue(&free_mem[idx],p);
     }
+}
+
+u64 left_page_cnt(){
+    return _left_page_cnt.count;
+}
+
+WARN_RESULT void* get_zero_page(){
+    return zero_page_ptr;
+}
+
+bool check_zero_page(){
+    void* zp = get_zero_page();
+    for (usize i = 0; i < PAGE_SIZE; i++) {
+        u8 c = ((u8*)zp)[i];
+        if (c != 0){
+            return false;
+        }
+    }
+    return true;
+}
+
+u32 write_page_to_disk(void* ka){
+    u32 bno = find_and_set_8_blocks();
+    for(u32 i=0;i<8;++i){
+        Block* block = bcache.acquire(bno+i);
+        memmove(block->data,(ka+i*BLOCK_SIZE),BLOCK_SIZE);
+        bcache.sync(NULL,block);
+        bcache.release(block);
+    }
+    return bno;
+}
+
+void read_page_from_disk(void* ka, u32 bno){
+    for(u32 i=0;i<8;++i){
+        Block* block = bcache.acquire(bno+i);
+        memmove((ka+i*BLOCK_SIZE),block->data,BLOCK_SIZE);
+        bcache.release(block);
+    }
+    release_8_blocks(bno);
 }
