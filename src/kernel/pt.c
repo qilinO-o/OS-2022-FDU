@@ -7,6 +7,9 @@
 #include <kernel/printk.h>
 #include <kernel/paging.h>
 
+extern struct page* pages_ref;
+extern char end[];
+
 PTEntriesPtr get_pte(struct pgdir* pgdir, u64 va, bool alloc){
     // TODO
     // Return a pointer to the PTE (Page Table Entry) for virtual address 'va'
@@ -137,5 +140,9 @@ void vmmap(struct pgdir* pd, u64 va, void* ka, u64 flags){
     PTEntriesPtr ptentry_ptr = get_pte(pd, va, true);
     *ptentry_ptr = K2P(ka);
     *ptentry_ptr |= flags;
+    u64 page_num = ((u64)ka-(PAGE_BASE((u64)&end) + PAGE_SIZE))/PAGE_SIZE;
+    _acquire_spinlock(&(pages_ref[page_num].ref_lock));
+    _increment_rc(&(pages_ref[page_num].ref));
+    _release_spinlock(&(pages_ref[page_num].ref_lock));
 }
 
