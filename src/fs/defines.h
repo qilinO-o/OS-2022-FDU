@@ -8,6 +8,13 @@
 
 #define BLOCK_SIZE 512
 
+// swap section
+#define SWAP_SIZE 200
+#define SWAP_START 800
+#define SWAP_END 1000
+#define SWAP_BIT_START 100
+#define SWAP_BIT_END 125
+
 // maximum number of distinct block numbers can be recorded in the log header.
 #define LOG_MAX_SIZE ((BLOCK_SIZE - sizeof(usize)) / sizeof(usize))
 

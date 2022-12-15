@@ -3,11 +3,13 @@
 #include <common/defines.h>
 #include <aarch64/mmu.h>
 #include <common/rc.h>
+#include <common/spinlock.h>
 
 #define REVERSED_PAGES 1024 //Reversed pages
 
 struct page{
 	RefCount ref;
+	SpinLock ref_lock;
 };
 
 WARN_RESULT void* kalloc_page();
