@@ -108,9 +108,12 @@ static Inode* inode_get(usize inode_no) {
     Inode* inode = NULL;
     while(p!=&head){
         inode = container_of(p,Inode,node);
-        if(inode->inode_no == inode_no && inode->rc.count > 0 && inode->valid){
+        if(inode->inode_no == inode_no && inode->rc.count > 0){
             _increment_rc(&(inode->rc));
             _release_spinlock(&lock);
+            // make sure the inode got from list is valid
+            inode_lock(inode);
+            inode_unlock(inode);
             return inode;
         }
         p = p->next;
@@ -169,21 +172,14 @@ static void inode_put(OpContext* ctx, Inode* inode) {
     _acquire_spinlock(&lock);
     if(inode->rc.count == 1 && inode->entry.num_links == 0 && inode->valid){
         inode_lock(inode);
+        _detach_from_list(&(inode->node));
         _release_spinlock(&lock);
         inode_clear(ctx,inode);
         inode->entry.type = INODE_INVALID;
         inode_sync(ctx,inode,true);
         inode->valid = false;
         inode_unlock(inode);
-        _acquire_spinlock(&lock);
-        if(inode->rc.count == 1){
-            _detach_from_list(&(inode->node));
-            kfree((void*)inode);
-        }
-        else{
-            _decrement_rc(&(inode->rc));
-        }
-        _release_spinlock(&lock);
+        kfree((void*)inode);
         return;
     }
     _decrement_rc(&(inode->rc));
