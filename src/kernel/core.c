@@ -30,6 +30,8 @@ NO_RETURN void kernel_entry() {
     // sd_test();
     
     do_rest_init();
+    pgfault_first_test();
+    pgfault_second_test();
 
     // TODO: map init.S to user space and trap_return to run icode
 }
