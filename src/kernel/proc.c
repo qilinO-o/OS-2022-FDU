@@ -260,6 +260,7 @@ void init_proc(struct proc* p){
     p->ucontext = (UserContext*)(p->kstack + PAGE_SIZE - 16 - sizeof(UserContext));
     p->kcontext = (KernelContext*)(p->kstack + PAGE_SIZE - 16 - sizeof(UserContext) - sizeof(KernelContext));
     p->container = &root_container;
+    init_oftable(&(p->oftable));
 }
 
 struct proc* create_proc(){
@@ -303,4 +304,36 @@ struct proc* get_offline_proc(){
 void trap_return();
 int fork() {
     /* TODO: Your code here. */
+    struct proc* child_proc = create_proc();
+    struct proc* this_proc = thisproc();
+         
+    set_parent_to_this(child_proc);
+    // copy all registers
+    *(child_proc->ucontext) = *(this_proc->ucontext);
+    // fork return as child
+    child_proc->ucontext->reserved[0] = 0;
+    // use same working dictionary
+    child_proc->cwd = inodes.share(this_proc->cwd);
+    // copy oftable to use same files
+    for(int i=0;i<NOFILE;++i){
+        if(this_proc->oftable.files_p[i] != NULL){
+            child_proc->oftable.files_p[i] = filedup(this_proc->oftable.files_p[i]);
+        }
+    }
+    // copy stack
+    memmove(child_proc->kstack, this_proc->kstack, PAGE_SIZE);
+    // copy pgdir
+    PTEntriesPtr old_pte;
+    for(u64 va=0;;va+=PAGE_SIZE){
+        old_pte = get_pte(&(this_proc->pgdir), va, false);
+        if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
+            vmmap(&(child_proc->pgdir), va, P2K(PTE_ADDRESS(*old_pte))\
+            , PTE_FLAGS(*old_pte) | PTE_RO);
+        }
+    }
+    copy_sections(&(this_proc->pgdir.section_head), &(child_proc->pgdir.section_head));
+
+    // start proc
+    start_proc(child_proc, trap_return, 0);
+    return child_proc->pid;
 }

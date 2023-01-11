@@ -145,6 +145,7 @@ int pgfault(u64 iss){
 		}
 	}
 	ASSERT(st!=NULL);
+	ASSERT(addr >= st->begin && addr < st->end);
 	if(st->flags & ST_SWAP){
 		swapin(pd, st);
 	}
@@ -169,13 +170,13 @@ int pgfault(u64 iss){
 }
 
 void init_sections(ListNode* section_head){
-	struct section *st = kalloc(sizeof(struct section));
-	st->begin = 0x0;
-	st->end = 0x0;
-	st->flags = 0;
-	st->flags |= ST_HEAP;
-	init_sleeplock(&(st->sleeplock));
-	_insert_into_list(section_head, &(st->stnode));
+	// struct section *st = kalloc(sizeof(struct section));
+	// st->begin = 0x0;
+	// st->end = 0x0;
+	// st->flags = 0;
+	// st->flags |= ST_HEAP;
+	// init_sleeplock(&(st->sleeplock));
+	// _insert_into_list(section_head, &(st->stnode));
 }
 
 void free_sections(struct pgdir* pd){

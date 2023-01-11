@@ -143,6 +143,16 @@ void attach_pgdir(struct pgdir* pgdir){
  */
 int copyout(struct pgdir* pd, void* va, void *p, usize len){
     // TODO
+    while(len > 0){
+        //void* va_off = va - ((u64)va % PAGE_SIZE)s;
+        void* va_off = PAGE_BASE((u64)va);
+        usize this_len = min(len, PAGE_SIZE-(u64)(va-va_off));
+        memmove(P2K(get_pte(pd, va, true))-(u64)(va-va_off), p, this_len);
+        len -= this_len;
+        p += this_len;
+        va += this_len;
+    }
+    return 0;
 }
 
 void vmmap(struct pgdir* pd, u64 va, void* ka, u64 flags){

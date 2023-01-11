@@ -3,6 +3,7 @@
 #include <kernel/mem.h>
 #include <kernel/printk.h>
 #include <sys/stat.h>
+#include <kernel/sched.h>
 
 // this lock mainly prevents concurrent access to inode list `head`, reference
 // count increment and decrement.
@@ -421,7 +422,39 @@ static const char* skipelem(const char* path, char* name) {
  */
 static Inode* namex(const char* path, int nameiparent, char* name, OpContext* ctx) {
     /* TODO: Lab10 Shell */
-    return 0;
+    Inode* p = NULL;
+    if(*path == '/'){
+        p = inodes.share(inodes.root);
+    }
+    else{
+        p = inodes.share(thisproc()->cwd);
+    }
+    while(*path != '\0'){
+        path = skipelem(path, name);
+        if(nameiparent == 1){
+            if(path == 0){
+                inodes.put(ctx,p);
+                return NULL;
+            }
+            else if(*path == '\0'){
+                return p;
+            }
+        }
+        inodes.lock(p);
+        if(p->entry.type != INODE_DIRECTORY){
+            inodes.unlock(p);
+            inodes.put(ctx,p);
+            return NULL;
+        }
+        usize ino = inodes.lookup(p,name,NULL);
+        inodes.unlock(p);
+        inodes.put(ctx,p);
+        if(ino == 0){
+            return NULL;
+        }
+        p = inodes.get(ino);
+    }
+    return p;
 }
 
 Inode* namei(const char* path, OpContext* ctx) {
