@@ -43,13 +43,14 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 	// read all program header and make corresponding section to new pgdir
 	u64 end = 0;
 	for(int i=0;i<elf_header.e_phnum; ++i){
-		if(inodes.read(inode_p, (u8*)(&program_header), 0, Phdr_size) < Phdr_size){
+		if(inodes.read(inode_p, (u8*)(&program_header), ph_off, Phdr_size) < Phdr_size){
 			inodes.unlock(inode_p);
 			inodes.put(&ctx, inode_p);
 			bcache.end_op(&ctx);
 			free_pgdir(exec_pgdir);
 			return -1;
 		}
+		ph_off += Phdr_size;
 		if(program_header.p_type != PT_LOAD){
 			continue;
 		}
@@ -87,7 +88,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 		u64 va = program_header.p_vaddr;
 		while(file_sz > 0){
 			u64 va0 = PAGE_BASE(va);
-			u64 sz = min(PAGE_SIZE - (va-va0), file_sz);
+			u64 sz = MIN(PAGE_SIZE - (va-va0), file_sz);
 			void* dest = kalloc(sz);
 			u64 pte_flag = PTE_USER_DATA;
 			if(section_flag == ST_TEXT){
@@ -112,7 +113,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 			file_sz = program_header.p_memsz - program_header.p_filesz;
 			while(file_sz > 0){
 				u64 va0 = PAGE_BASE(va);
-				u64 sz = min(PAGE_SIZE - (va-va0), file_sz);
+				u64 sz = MIN(PAGE_SIZE - (va-va0), file_sz);
 				vmmap(exec_pgdir, va0, dest, PTE_USER_DATA | PTE_RO);
 				file_sz -= sz;
 				va += sz;
@@ -126,7 +127,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 	// create user stack
 	u64 stack_page_size = 5;
 	u64 sp = PAGE_BASE(end) + PAGE_SIZE + stack_page_size * PAGE_SIZE;
-	for(int i=1;i<=stack_page_size;++i){
+	for(u64 i=1;i<=stack_page_size;++i){
 		void* p = kalloc_page();
 		vmmap(exec_pgdir, sp-i*PAGE_SIZE, p, PTE_USER_DATA);
 	}
@@ -136,8 +137,22 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 	sp -= 8;
     u64 tmp = 0;
     copyout(exec_pgdir, (void*)sp, &tmp, 8);
-	
+
 	u64 argc = 0;
+	if(envp){
+		while(envp[argc]){
+			++argc;
+		}
+		for(int i=argc-1;i>=0;--i){
+			sp -= (strlen(envp[i]) + 1);
+			copyout(exec_pgdir, (void*)sp, envp[i], strlen(envp[i]) + 1);
+		}
+	}
+
+	sp -= 8;
+    copyout(exec_pgdir, (void*)sp, &tmp, 8);
+	
+	argc = 0;
 	if(argv){
 		while(argv[argc]){
 			++argc;

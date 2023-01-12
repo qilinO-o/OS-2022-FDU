@@ -14,12 +14,12 @@
 #include <kernel/init.h>
 #include <driver/sd.h>
 
-define_rest_init(paging){
-	//TODO init
-	sd_init();
-	init_block_device();
-	init_bcache(get_super_block(),&block_device);
-}
+// define_rest_init(paging){
+// 	//TODO init
+// 	sd_init();
+// 	init_block_device();
+// 	init_bcache(get_super_block(),&block_device);
+// }
 
 u64 sbrk(i64 size){
 	//TODO
@@ -140,6 +140,9 @@ int pgfault(u64 iss){
 	_for_in_list(node, &(pd->section_head)){
 		if(node == &(pd->section_head)) break;
 		st = container_of(node, struct section, stnode);
+		if(st->flags == ST_TEXT){
+			continue;
+		}
 		if(st->begin <= addr && addr < st->end){
 			break;
 		}
@@ -170,13 +173,13 @@ int pgfault(u64 iss){
 }
 
 void init_sections(ListNode* section_head){
-	// struct section *st = kalloc(sizeof(struct section));
-	// st->begin = 0x0;
-	// st->end = 0x0;
-	// st->flags = 0;
-	// st->flags |= ST_HEAP;
-	// init_sleeplock(&(st->sleeplock));
-	// _insert_into_list(section_head, &(st->stnode));
+	struct section *st = kalloc(sizeof(struct section));
+	st->begin = 0x0;
+	st->end = 0x0;
+	st->flags = 0;
+	st->flags |= ST_HEAP;
+	init_sleeplock(&(st->sleeplock));
+	_insert_into_list(section_head, &(st->stnode));
 }
 
 void free_sections(struct pgdir* pd){
@@ -189,6 +192,12 @@ void free_sections(struct pgdir* pd){
 		st = container_of(node, struct section, stnode);
 		if(st->flags & ST_SWAP){
 			swapin(pd, st);
+		}
+		for(u64 i=PAGE_BASE(st->begin); i<st->end; i+=PAGE_SIZE){
+			PTEntriesPtr pte_p = get_pte(pd, i, false);
+			if(*pte_p && (*pte_p & PTE_VALID)){
+				kfree_page((void*)P2K(PTE_ADDRESS(*pte_p)));
+			}
 		}
 		node = node->next;
 		kfree((void*)st);

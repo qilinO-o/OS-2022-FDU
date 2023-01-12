@@ -327,7 +327,7 @@ int fork() {
     for(u64 va=0;;va+=PAGE_SIZE){
         old_pte = get_pte(&(this_proc->pgdir), va, false);
         if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
-            vmmap(&(child_proc->pgdir), va, P2K(PTE_ADDRESS(*old_pte))\
+            vmmap(&(child_proc->pgdir), va, (void*)P2K(PTE_ADDRESS(*old_pte))\
             , PTE_FLAGS(*old_pte) | PTE_RO);
         }
     }

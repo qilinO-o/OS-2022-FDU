@@ -277,7 +277,7 @@ static void update_this_proc(struct proc* p){
 // A simple scheduler.
 // You are allowed to replace it with whatever you like.
 static void simple_sched(enum procstate new_state){
-    auto this = thisproc();
+    struct proc* this = thisproc();
     if(this->killed && new_state!=ZOMBIE){
         _release_sched_lock();
         return;

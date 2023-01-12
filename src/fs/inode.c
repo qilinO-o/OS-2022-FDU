@@ -244,8 +244,8 @@ static usize inode_map(OpContext* ctx,
 static usize inode_read(Inode* inode, u8* dest, usize offset, usize count) {
     InodeEntry* entry = &inode->entry;
     if (inode->entry.type == INODE_DEVICE) {
-        assert(inode->entry.major == 1);
-        return console_read(inode, dest, count);
+        ASSERT(inode->entry.major == 1);
+        return console_read(inode, (char*)dest, count);
     }
     if (count + offset > entry->num_bytes)
         count = entry->num_bytes - offset;
@@ -282,8 +282,8 @@ static usize inode_write(OpContext* ctx,
     InodeEntry* entry = &inode->entry;
     usize end = offset + count;
     if (inode->entry.type == INODE_DEVICE) {
-        assert(inode->entry.major == 1);
-        return console_write(inode, src, count);
+        ASSERT(inode->entry.major == 1);
+        return console_write(inode, (char*)src, count);
     }
     ASSERT(offset <= entry->num_bytes);
     ASSERT(end <= INODE_MAX_BYTES);

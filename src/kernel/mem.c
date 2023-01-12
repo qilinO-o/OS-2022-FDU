@@ -22,7 +22,7 @@ define_early_init(alloc_page_cnt){
 static QueueNode* pages;
 static QueueNode* free_mem[MAX_ORDER];
 static void* zero_page_ptr;
-struct page* pages_ref;
+struct page* pages_ref; // index is count by phyical addr
 
 extern char end[];
 
@@ -44,7 +44,7 @@ define_early_init(pages){
 define_init(zero_page){
     zero_page_ptr = kalloc_page();
     memset(zero_page_ptr,0,PAGE_SIZE);
-    u64 page_num = ((u64)zero_page_ptr-(PAGE_BASE((u64)&end) + PAGE_SIZE))/PAGE_SIZE;
+    u64 page_num = ((u64)K2P(zero_page_ptr))/PAGE_SIZE;
     pages_ref[page_num].ref.count = 1;
 }
 
@@ -62,7 +62,7 @@ void* kalloc_page(){
 void kfree_page(void* p){
     _decrement_rc(&alloc_page_cnt);
     // TODO
-    u64 page_num = ((u64)p-(PAGE_BASE((u64)&end) + PAGE_SIZE))/PAGE_SIZE;
+    u64 page_num = ((u64)K2P(p))/PAGE_SIZE;
     _acquire_spinlock(&(pages_ref[page_num].ref_lock));
     _decrement_rc(&(pages_ref[page_num].ref));
     if(pages_ref[page_num].ref.count <= 0){

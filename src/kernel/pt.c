@@ -82,7 +82,8 @@ void init_pgdir(struct pgdir* pgdir){
     void* p = kalloc_page();
     memset(p,0,PAGE_SIZE);
     pgdir->pt = (PTEntriesPtr)p;
-    init_sections(&(pgdir->section_head));
+    init_list_node(&(pgdir->section_head));
+    // init_sections(&(pgdir->section_head));
 }
 
 void free_pgdir(struct pgdir* pgdir){
@@ -145,9 +146,9 @@ int copyout(struct pgdir* pd, void* va, void *p, usize len){
     // TODO
     while(len > 0){
         //void* va_off = va - ((u64)va % PAGE_SIZE)s;
-        void* va_off = PAGE_BASE((u64)va);
-        usize this_len = min(len, PAGE_SIZE-(u64)(va-va_off));
-        memmove(P2K(get_pte(pd, va, true))-(u64)(va-va_off), p, this_len);
+        void* va_off = (void*)PAGE_BASE((u64)va);
+        usize this_len = MIN(len, PAGE_SIZE-(u64)(va-va_off));
+        memmove((void*)(P2K(get_pte(pd, (u64)va, true))-(u64)(va-va_off)), p, this_len);
         len -= this_len;
         p += this_len;
         va += this_len;
@@ -157,9 +158,10 @@ int copyout(struct pgdir* pd, void* va, void *p, usize len){
 
 void vmmap(struct pgdir* pd, u64 va, void* ka, u64 flags){
     PTEntriesPtr ptentry_ptr = get_pte(pd, va, true);
-    *ptentry_ptr = K2P(ka);
+    u64 ka0 = PAGE_BASE((u64)ka);
+    *ptentry_ptr = K2P(ka0);
     *ptentry_ptr |= flags;
-    u64 page_num = ((u64)ka-(PAGE_BASE((u64)&end) + PAGE_SIZE))/PAGE_SIZE;
+    u64 page_num = ((u64)K2P(ka0))/PAGE_SIZE;
     _acquire_spinlock(&(pages_ref[page_num].ref_lock));
     _increment_rc(&(pages_ref[page_num].ref));
     _release_spinlock(&(pages_ref[page_num].ref_lock));

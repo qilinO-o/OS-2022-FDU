@@ -75,7 +75,7 @@ static void _create_user_proc(int i)
     ASSERT(p->pgdir.pt);
     p->ucontext->reserved[0] = i;
     p->ucontext->elr = 0x400000;
-    p->ucontext->ttbr0 = K2P(p->pgdir.pt);
+    //p->ucontext->ttbr0 = K2P(p->pgdir.pt);
     p->ucontext->spsr = 0;
     pids[i] = p->pid;
     set_parent_to_this(p);

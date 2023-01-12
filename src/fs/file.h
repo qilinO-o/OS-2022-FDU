@@ -8,8 +8,8 @@
 #include <sys/stat.h>
 #include <common/list.h>
 
-#define NFILE 65536  // Open files per system
-#define NOFILE 1024  // Open files per proc
+#define NFILE 1024  // Open files per system
+#define NOFILE 128  // Open files per proc
 #define MAX_OP_WRITE_N (OP_MAX_NUM_BLOCKS - 1 - 1 - 2)/2 * BLOCK_SIZE
 
 typedef struct file {

@@ -97,7 +97,7 @@ isize fileread(struct file* f, char* addr, isize n) {
         return nread;
     }
     else if(f->type == FD_PIPE){
-        return pipeRead(f->pipe, addr, n);
+        return pipeRead(f->pipe, (u64)addr, n);
     }
     else{
         PANIC();
@@ -113,10 +113,10 @@ isize filewrite(struct file* f, char* addr, isize n) {
     }
     if(f->type == FD_INODE){
         usize max_valid_write_n = INODE_MAX_BYTES - f->off;
-        n = min(n, max_valid_write_n);
+        n = MIN((usize)n, max_valid_write_n);
         usize nwrite = 0;
-        while(nwrite < n){
-            usize op_n = min(n-nwrite, MAX_OP_WRITE_N);
+        while(nwrite < (usize)n){
+            usize op_n = MIN((usize)(n-nwrite), (usize)MAX_OP_WRITE_N);
             OpContext ctx;
             bcache.begin_op(&ctx);
             inodes.lock(f->ip);
@@ -128,7 +128,7 @@ isize filewrite(struct file* f, char* addr, isize n) {
         return nwrite;
     }
     else if(f->type == FD_PIPE){
-        return pipeWrite(f->pipe, addr, n);
+        return pipeWrite(f->pipe, (u64)addr, n);
     }
     else{
         PANIC();

@@ -67,10 +67,20 @@ define_syscall(ioctl, int fd, u64 request) {
  */
 define_syscall(mmap, void* addr, int length, int prot, int flags, int fd, int offset) {
     // TODO
+    addr = addr;
+    length = length;
+    prot = prot;
+    flags = flags;
+    fd = fd;
+    offset = offset;
+    return 0;
 }
 
-define_syscall(munmap, void *addr, size_t length) {
+define_syscall(munmap, void *addr, u64 length) {
     // TODO
+    addr = addr;
+    length = length;
+    return 0;
 }
 
 /*
@@ -80,7 +90,7 @@ define_syscall(dup, int fd) {
     struct file* f = fd2file(fd);
     if (!f)
         return -1;
-    int fd = fdalloc(f);
+    fd = fdalloc(f);
     if (fd < 0)
         return -1;
     filedup(f);
@@ -193,7 +203,7 @@ Inode* create(const char* path, short type, short major, short minor, OpContext*
         return NULL;
     }
     inodes.lock(parent_dir);
-    int idx = 0;
+    usize idx = 0;
     u32 inode_no = inodes.lookup(parent_dir, filename, &idx);
     // if inode of name do exist
     if(inode_no != 0){
@@ -214,13 +224,13 @@ Inode* create(const char* path, short type, short major, short minor, OpContext*
         if(type == INODE_DIRECTORY){
             usize ret1 = inodes.insert(ctx, current_inode, ".", current_inode->inode_no);
             usize ret2 = inodes.insert(ctx, current_inode, "..", parent_dir->inode_no);
-            ASSERT(ret1 != -1 && ret2 != -1);
+            ASSERT(ret1 != (usize)-1 && ret2 != (usize)-1);
             parent_dir->entry.num_links += 1;
             inodes.sync(ctx, parent_dir, true);
         }
         // put the new alloc inode in parent inode's dir
         usize ret = inodes.insert(ctx, parent_dir, filename, current_inode->inode_no);
-        ASSERT(ret != -1);
+        ASSERT(ret != (usize)-1);
     }
     inodes.unlock(parent_dir);
     inodes.put(ctx, parent_dir);

@@ -45,6 +45,7 @@ define_syscall(clone, int flag, void* childstk) {
         printk("sys_clone: flags other than SIGCHLD are not supported.\n");
         return -1;
     }
+    childstk = childstk;
     return fork();
 }
 
