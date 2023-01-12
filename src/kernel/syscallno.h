@@ -1,4 +1,5 @@
 #pragma once
+#include <sys/syscall.h>
 
 #define SYS_myreport 499
 #define SYS_pstat 500
@@ -37,13 +38,11 @@
 #define SYS_inotify_init1 26
 #define SYS_inotify_add_watch 27
 #define SYS_inotify_rm_watch 28
-#define SYS_ioctl 29
 #define SYS_ioprio_set 30
 #define SYS_ioprio_get 31
 #define SYS_flock 32
 #define SYS_mknodat 33
 #define SYS_mkdirat 34
-#define SYS_unlinkat 35
 #define SYS_symlinkat 36
 #define SYS_linkat 37
 #define SYS_renameat 38
@@ -101,8 +100,6 @@
 #define SYS_capget 90
 #define SYS_capset 91
 #define SYS_personality 92
-#define SYS_exit 93
-#define SYS_exit_group 94
 #define SYS_waitid 95
 #define SYS_set_tid_address 96
 #define SYS_unshare 97
@@ -144,7 +141,6 @@
 #define SYS_rt_sigsuspend 133
 #define SYS_rt_sigaction 134
 #define SYS_rt_sigprocmask 135
-#define SYS_sigprocmask 135
 #define SYS_rt_sigpending 136
 #define SYS_rt_sigtimedwait 137
 #define SYS_rt_sigqueueinfo 138
@@ -229,7 +225,6 @@
 #define SYS_add_key 217
 #define SYS_request_key 218
 #define SYS_keyctl 219
-#define SYS_execve 221
 #define SYS_mmap 222
 #define SYS_fadvise64 223
 #define SYS_swapon 224
@@ -252,7 +247,6 @@
 #define SYS_perf_event_open 241
 #define SYS_accept4 242
 #define SYS_recvmmsg 243
-#define SYS_wait4 260
 #define SYS_prlimit64 261
 #define SYS_fanotify_init 262
 #define SYS_fanotify_mark 263
@@ -310,3 +304,14 @@
 #define SYS_landlock_add_rule	445
 #define SYS_landlock_restrict_self	446
 
+#define SYS_exit 93
+#define SYS_execve 221
+
+#define SYS_tid_address 96
+#define SYS_ioctl 29
+#define SYS_sigprocmask 135
+#define SYS_wait4 260
+#define SYS_exit_group 94
+#define SYS_unlinkat 35
+
+// find more in musl/arch/aarch64/bits/syscall.h
