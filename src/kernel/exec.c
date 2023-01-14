@@ -42,6 +42,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 	u64 ph_off = elf_header.e_phoff;
 	// read all program header and make corresponding section to new pgdir
 	u64 end = 0;
+	u64 max_end = 0;
 	for(int i=0;i<elf_header.e_phnum; ++i){
 		if(inodes.read(inode_p, (u8*)(&program_header), ph_off, Phdr_size) < Phdr_size){
 			inodes.unlock(inode_p);
@@ -56,12 +57,12 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 		}
 		u64 section_flag = 0;
 		// text section
-		if(program_header.p_flags & (PF_R | PF_X)){
+		if(program_header.p_flags == (PF_R | PF_X)){
 			section_flag = ST_TEXT;
 			end = program_header.p_vaddr + program_header.p_filesz;
 		}
 		// data and bss section
-		else if(program_header.p_flags & (PF_R | PF_W)){
+		else if(program_header.p_flags == (PF_R | PF_W)){
 			section_flag = ST_FILE;
 			end = program_header.p_vaddr + program_header.p_memsz;
 		}
@@ -73,13 +74,18 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 			return -1;
 		}
 
+		// insert into new section
 		struct section *st = kalloc(sizeof(struct section));
 		st->begin = program_header.p_vaddr;
 		st->end = end;
+		if(end > max_end){
+			max_end = end;
+		}
 		st->flags = section_flag;
 		init_sleeplock(&(st->sleeplock));
 		_insert_into_list(&(exec_pgdir->section_head), &(st->stnode));
 
+		// load
 		// (1) allocate memory, va region [vaddr, vaddr+filesz)
 		// (2) copy [offset, offset + filesz) of file to va [vaddr, vaddr+filesz) of memory
 		// copy page by page
@@ -89,7 +95,8 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 		while(file_sz > 0){
 			u64 va0 = PAGE_BASE(va);
 			u64 sz = MIN(PAGE_SIZE - (va-va0), file_sz);
-			void* dest = kalloc(sz);
+			void* dest = kalloc_page();
+			memset(dest, 0, PAGE_SIZE);
 			u64 pte_flag = PTE_USER_DATA;
 			if(section_flag == ST_TEXT){
 				pte_flag |= PTE_RO;
@@ -106,11 +113,16 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 			off += sz;
 			va += sz;
 		}
+		// for bss
 		// [p_vaddr+p_filesz, p_vaddr+p_memsz) the bss section which is required to set to 0
 		// COW by using the zero page
-		if(section_flag == ST_FILE){
+		if(va != PAGE_BASE(va)){
+			va = PAGE_BASE(va) + PAGE_SIZE;
+		}
+		
+		if((section_flag == ST_FILE) && (program_header.p_memsz > (va - program_header.p_vaddr))){
 			void* dest = get_zero_page();
-			file_sz = program_header.p_memsz - program_header.p_filesz;
+			file_sz = program_header.p_memsz - (va - program_header.p_vaddr);
 			while(file_sz > 0){
 				u64 va0 = PAGE_BASE(va);
 				u64 sz = MIN(PAGE_SIZE - (va-va0), file_sz);
@@ -126,56 +138,80 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 
 	// create user stack
 	u64 stack_page_size = 5;
-	u64 sp = PAGE_BASE(end) + PAGE_SIZE + stack_page_size * PAGE_SIZE;
+	u64 sp = PAGE_BASE(max_end) + PAGE_SIZE + stack_page_size * PAGE_SIZE;
 	for(u64 i=1;i<=stack_page_size;++i){
 		void* p = kalloc_page();
+		memset(p, 0, PAGE_SIZE);
 		vmmap(exec_pgdir, sp-i*PAGE_SIZE, p, PTE_USER_DATA);
 	}
+	// add stack to section
+	struct section *stack_st = kalloc(sizeof(struct section));
+	stack_st->flags = 1024;
+	stack_st->begin = sp - stack_page_size*PAGE_SIZE;
+	stack_st->end = sp;
+	init_sleeplock(&(stack_st->sleeplock));
+	_insert_into_list(&(exec_pgdir->section_head), &(stack_st->stnode));
 	// fill in stack
 	struct proc* this_proc = thisproc();
 	
-	sp -= 8;
+	sp -= 16;
     u64 tmp = 0;
     copyout(exec_pgdir, (void*)sp, &tmp, 8);
 
 	u64 argc = 0;
+	u64 envp_p[32];
 	if(envp){
 		while(envp[argc]){
 			++argc;
 		}
 		for(int i=argc-1;i>=0;--i){
 			sp -= (strlen(envp[i]) + 1);
+			sp -= (sp % 8);
 			copyout(exec_pgdir, (void*)sp, envp[i], strlen(envp[i]) + 1);
+			envp_p[i] = sp;
 		}
 	}
+	envp_p[argc] = 0;
 
 	sp -= 8;
     copyout(exec_pgdir, (void*)sp, &tmp, 8);
 	
 	argc = 0;
+	u64 argv_p[32];
 	if(argv){
 		while(argv[argc]){
 			++argc;
 		}
 		for(int i=argc-1;i>=0;--i){
 			sp -= (strlen(argv[i]) + 1);
+			sp -= (sp % 8);
 			copyout(exec_pgdir, (void*)sp, argv[i], strlen(argv[i]) + 1);
-			if(i == 0){
-				this_proc->ucontext->reserved[1] = sp;
-			}
+			argv_p[i] = sp;
 		}
 	}
+	argv_p[argc] = 0;
 	this_proc->ucontext->reserved[0] = argc;
+
+	sp -= (u64)(argc + 1)*8;
+	copyout(exec_pgdir, (void*)sp, envp_p, (u64)(argc + 1)*8);
+
+	sp -= (u64)(argc + 1)*8;
+	this_proc->ucontext->reserved[1] = sp;
+	copyout(exec_pgdir, (void*)sp, argv_p, (u64)(argc + 1)*8);
 	
 	sp -= 8;
     copyout(exec_pgdir, (void*)sp, &argc, 8);
 
 	// change to new exec_pgdir
 	struct pgdir* old_pgdir = &(this_proc->pgdir);
+	free_pgdir(old_pgdir);
 	this_proc->ucontext->sp = sp;
 	this_proc->ucontext->elr = elf_header.e_entry;
-	this_proc->pgdir = *exec_pgdir;
-	attach_pgdir(exec_pgdir);
-	free_pgdir(old_pgdir);
+	memmove(&(this_proc->pgdir), exec_pgdir, sizeof(struct pgdir));
+	// use already kalloced sections
+	_insert_into_list(&(exec_pgdir->section_head), &(this_proc->pgdir.section_head));
+	_detach_from_list(&(exec_pgdir->section_head));
+	kfree(exec_pgdir);
+	attach_pgdir(&(this_proc->pgdir));
 	return 0;
 }

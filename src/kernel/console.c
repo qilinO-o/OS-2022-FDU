@@ -12,13 +12,15 @@ struct {
     usize w;  // Write index
     usize e;  // Edit index
     SpinLock lock;
+    Semaphore can_read_sem;
 } input;
 #define C(x)      ((x) - '@')  // Control-x
-#define BACKSPACE '\b'
+#define BACKSPACE 127
 
 define_rest_init(console){
     init_spinlock(&(input.lock));
-    set_interrupt_handler(IRQ_AUX, console_intr);
+    init_sem(&(input.can_read_sem), 0);
+    //set_interrupt_handler(IRQ_AUX, console_intr);
 }
 
 isize console_write(Inode *ip, char *buf, isize n) {
@@ -35,18 +37,34 @@ isize console_write(Inode *ip, char *buf, isize n) {
 
 isize console_read(Inode *ip, char *dst, isize n) {
     // TODO
+    isize target = n;
     isize r = 0;
     inodes.unlock(ip);
     _acquire_spinlock(&(input.lock));
     while(n > 0){
+        if(input.r == input.w){
+            _release_spinlock(&(input.lock));
+            if(_wait_sem(&(input.can_read_sem), true) == 0){
+                return -1;
+            }
+            _acquire_spinlock(&(input.lock));
+        }
         input.r = (input.r+1) % INPUT_BUF;
         char c = input.buf[input.r];
         if(c == C('D')){
+            // Save ^D for next time, to make sure
+            // caller gets a 0-byte result.
+            if (n < target) {
+                input.r--;
+            }
             break;
         }
         *(dst++) = c;
         r++;
         n--;
+        if(c == '\n'){
+            break;
+        }
     }
     _release_spinlock(&(input.lock));
     inodes.lock(ip);
@@ -57,7 +75,10 @@ void console_intr(char (*getc)()) {
     // TODO
     char c;
     _acquire_spinlock(&(input.lock));
-    while(uart_valid_char(c = getc())){
+    while((c = getc()) != 0xff){
+        if(c == '\r'){
+            c = '\n';
+        }
         if(c == BACKSPACE){
             if(input.e != input.w){
                 input.e = (input.e-1) % INPUT_BUF;
@@ -82,6 +103,7 @@ void console_intr(char (*getc)()) {
             input.buf[input.e] = c;
             uart_put_char(c);
             input.w = input.e;
+            post_sem(&(input.can_read_sem));
         }
         else if(c == C('C')){
             uart_put_char('^');
@@ -97,6 +119,7 @@ void console_intr(char (*getc)()) {
             uart_put_char(c);
             if(c == '\n' || (input.e + 1)%INPUT_BUF == input.r){
                 input.w = input.e;
+                post_sem(&(input.can_read_sem));
             }
         }
     }

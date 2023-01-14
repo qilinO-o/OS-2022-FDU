@@ -199,20 +199,6 @@ static int isdirempty(Inode* dp) {
     return 1;
 }
 
-// Is the directory dp empty except for "." and ".." ?
-static int isdirempty(Inode* dp) {
-    usize off;
-    DirEntry de;
-
-    for (off = 2 * sizeof(de); off < dp->entry.num_bytes; off += sizeof(de)) {
-        if (inodes.read(dp, (u8*)&de, off, sizeof(de)) != sizeof(de))
-            PANIC();
-        if (de.inode_no != 0)
-            return 0;
-    }
-    return 1;
-}
-
 define_syscall(unlinkat, int fd, const char* path, int flag) {
     ASSERT(fd == AT_FDCWD && flag == 0);
     Inode *ip, *dp;

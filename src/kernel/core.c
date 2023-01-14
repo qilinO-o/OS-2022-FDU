@@ -39,14 +39,19 @@ void kernel_entry() {
 
     // TODO: map init.S to user space and trap_return to run icode
     struct proc* p = thisproc();
+    p->cwd = inodes.root;
     struct section *st = kalloc(sizeof(struct section));
     st->begin = (u64)icode - PAGE_BASE((u64)icode);
     st->end = st->begin + (u64)eicode-(u64)icode;
     st->flags = ST_TEXT;
     init_sleeplock(&(st->sleeplock));
     _insert_into_list(&(p->pgdir.section_head), &(st->stnode));
-    vmmap(&(p->pgdir), 0x0, (void*)icode, PTE_USER_DATA | PTE_RO);
-    set_return_addr((u64)icode - PAGE_BASE((u64)icode));
+    for(u64 va = PAGE_BASE((u64)icode);va <= (u64)eicode; va += PAGE_SIZE){
+        vmmap(&(p->pgdir), 0x0, (void*)va, PTE_USER_DATA | PTE_RO);
+    }
+    
+    p->ucontext->elr = (u64)icode - PAGE_BASE((u64)icode);
+    set_return_addr(trap_return);
 }
 
 NO_INLINE NO_RETURN void _panic(const char* file, int line) {

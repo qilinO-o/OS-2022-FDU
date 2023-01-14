@@ -60,6 +60,9 @@ void* kalloc_page(){
 }
 
 void kfree_page(void* p){
+    if((u64)p < PAGE_BASE((u64)&end) + PAGE_SIZE){
+        return;
+    }
     _decrement_rc(&alloc_page_cnt);
     // TODO
     u64 page_num = ((u64)K2P(p))/PAGE_SIZE;

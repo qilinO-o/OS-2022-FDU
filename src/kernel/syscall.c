@@ -33,6 +33,9 @@ void syscall_entry(UserContext* context){
 // check if the virtual address [start,start+size) is READABLE by the current user process
 bool user_readable(const void* start, usize size) {
     // TODO
+    if((u64)start >= KSPACE_MASK){
+        return true;
+    }
     bool ret = false;
     struct section* st = NULL;
     ListNode* st_head = &(thisproc()->pgdir.section_head);
@@ -50,6 +53,9 @@ bool user_readable(const void* start, usize size) {
 // check if the virtual address [start,start+size) is READABLE & WRITEABLE by the current user process
 bool user_writeable(const void* start, usize size) {
     // TODO
+    if((u64)start >= KSPACE_MASK){
+        return true;
+    }
     bool ret = false;
     struct section* st = NULL;
     ListNode* st_head = &(thisproc()->pgdir.section_head);

@@ -148,7 +148,8 @@ int copyout(struct pgdir* pd, void* va, void *p, usize len){
         //void* va_off = va - ((u64)va % PAGE_SIZE)s;
         void* va_off = (void*)PAGE_BASE((u64)va);
         usize this_len = MIN(len, PAGE_SIZE-(u64)(va-va_off));
-        memmove((void*)(P2K(get_pte(pd, (u64)va, true))-(u64)(va-va_off)), p, this_len);
+        PTEntriesPtr pte_p = get_pte(pd, (u64)va, true);
+        memmove((void*)(P2K(PTE_ADDRESS(*pte_p))+(u64)(va-va_off)), p, this_len);
         len -= this_len;
         p += this_len;
         va += this_len;

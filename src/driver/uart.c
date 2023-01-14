@@ -1,9 +1,10 @@
 #include <aarch64/intrinsic.h>
 #include <driver/aux.h>
 #include <driver/gpio.h>
-// #include <driver/interrupt.h>
+#include <driver/interrupt.h>
 #include <driver/uart.h>
 #include <kernel/init.h>
+#include <kernel/console.h>
 
 define_early_init(uart) {
     device_put_u32(GPPUD, 0);
@@ -29,7 +30,7 @@ define_early_init(uart) {
     // finally, enable receiver and transmitter.
     device_put_u32(AUX_MU_CNTL_REG, 3);
 
-    // set_interrupt_handler(IRQ_AUX, uart_intr);
+    set_interrupt_handler(IRQ_AUX, uart_intr);
 }
 
 char uart_get_char() {
@@ -51,3 +52,7 @@ void uart_put_char(char c) {
 }
 
 __attribute__((weak, alias("uart_put_char"))) void putch(char);
+
+void uart_intr(){
+    console_intr(uart_get_char);
+}

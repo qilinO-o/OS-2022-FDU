@@ -140,9 +140,6 @@ int pgfault(u64 iss){
 	_for_in_list(node, &(pd->section_head)){
 		if(node == &(pd->section_head)) break;
 		st = container_of(node, struct section, stnode);
-		if(st->flags == ST_TEXT){
-			continue;
-		}
 		if(st->begin <= addr && addr < st->end){
 			break;
 		}
@@ -201,5 +198,17 @@ void free_sections(struct pgdir* pd){
 		}
 		node = node->next;
 		kfree((void*)st);
+	}
+}
+
+void copy_sections(ListNode* from_head, ListNode* to_head){
+	_for_in_list(node, from_head){
+		if(node == from_head){
+			break;
+		}
+		struct section* st = container_of(node, struct section, stnode);
+		struct section* new_st = kalloc(sizeof(struct section));
+		memmove(new_st, st, sizeof(struct section));
+		_insert_into_list(to_head, &(new_st->stnode));
 	}
 }

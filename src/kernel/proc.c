@@ -320,13 +320,18 @@ int fork() {
             child_proc->oftable.files_p[i] = filedup(this_proc->oftable.files_p[i]);
         }
     }
-    // copy stack
-    memmove(child_proc->kstack, this_proc->kstack, PAGE_SIZE);
     // copy pgdir
     PTEntriesPtr old_pte;
-    for(u64 va=0;;va+=PAGE_SIZE){
-        old_pte = get_pte(&(this_proc->pgdir), va, false);
-        if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
+    _for_in_list(node, &(this_proc->pgdir.section_head)){
+        if(node == &(this_proc->pgdir.section_head)){
+            break;
+        }
+        struct section* st = container_of(node, struct section, stnode);
+        for(u64 va = PAGE_BASE(st->begin); va < st->end; va += PAGE_SIZE){
+            old_pte = get_pte(&(this_proc->pgdir), va, false);
+            if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
+                break;
+            }
             vmmap(&(child_proc->pgdir), va, (void*)P2K(PTE_ADDRESS(*old_pte))\
             , PTE_FLAGS(*old_pte) | PTE_RO);
         }
