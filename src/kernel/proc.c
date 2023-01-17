@@ -92,8 +92,19 @@ NO_RETURN void exit(int code){
     struct proc* cp = thisproc();
     ASSERT(cp != cp->container->rootproc && !cp->idle);
     cp->exitcode = code;
-    free_sections(&(cp->pgdir));
-    free_pgdir(&(cp->pgdir));
+    // release files used by this proc
+    for(int i = 0; i < NOFILE; ++i) {
+        if(cp->oftable.files_p[i] != NULL){
+            fileclose(cp->oftable.files_p[i]);
+            cp->oftable.files_p[i] = NULL;
+        }
+    }
+    // release current working dictionary
+    OpContext ctx;
+    bcache.begin_op(&ctx);
+    inodes.put(&ctx, cp->cwd);
+    bcache.end_op(&ctx);
+    cp->cwd = NULL;
 
     acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     ListNode* child_list = &(cp->children);
@@ -151,6 +162,7 @@ int wait(int* exitcode, int* pid)
     if(wait_sig == false){
         return -1;
     }
+    //printk("wake up, pid=%d\n",thisproc()->pid);
     
     acquire_spinlock(ch_proc_tree_lock, &proc_tree_lock);
     _for_in_list(node, child_list){
@@ -158,12 +170,15 @@ int wait(int* exitcode, int* pid)
         struct proc* child_proc = container_of(node, struct proc, ptnode);
         if(is_zombie(child_proc)){
             ASSERT(child_proc->parent == cp);
+            //printk("pid=%d is exit\n", child_proc->pid);
+            // delete it from current proc's child list
             _detach_from_list(node);
             child_proc->state = UNUSED;
             int pid_global = child_proc->pid;
             int pid_local = child_proc->localpid;
             *exitcode = child_proc->exitcode;
             
+            // delete it from the pid-proc map
             _acquire_spinlock(&pid_proc_tree_lock);
             struct pid_proc_rb_t dest = {child_proc->pid,NULL,{NULL,NULL,0}};
             auto del_node = _rb_lookup(&(dest.node),&(pid_proc_map.root),__pid_proc_cmp);
@@ -172,6 +187,8 @@ int wait(int* exitcode, int* pid)
             pid_proc_map.num--;
             _release_spinlock(&pid_proc_tree_lock);
             
+            // free resources of the child proc  
+            //free_pgdir(&(cp->pgdir));
             free_pid(&global_pidmap, child_proc->pid);
             free_pid(&(child_proc->container->pidmap), child_proc->localpid);
             kfree_page(child_proc->kstack);
@@ -321,19 +338,29 @@ int fork() {
         }
     }
     // copy pgdir
+    free_pgdir(&(child_proc->pgdir));
     PTEntriesPtr old_pte;
     _for_in_list(node, &(this_proc->pgdir.section_head)){
         if(node == &(this_proc->pgdir.section_head)){
             break;
         }
         struct section* st = container_of(node, struct section, stnode);
+        // for(u64 va = PAGE_BASE(st->begin); va < st->end; va += PAGE_SIZE){
+        //     old_pte = get_pte(&(this_proc->pgdir), va, false);
+        //     if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
+        //         continue;
+        //     }
+        //     vmmap(&(child_proc->pgdir), va, (void*)P2K(PTE_ADDRESS(*old_pte))
+        //     , PTE_FLAGS(*old_pte) | PTE_RO);
+        // }
         for(u64 va = PAGE_BASE(st->begin); va < st->end; va += PAGE_SIZE){
             old_pte = get_pte(&(this_proc->pgdir), va, false);
             if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
-                break;
+                continue;
             }
-            vmmap(&(child_proc->pgdir), va, (void*)P2K(PTE_ADDRESS(*old_pte))\
-            , PTE_FLAGS(*old_pte) | PTE_RO);
+            void* new_page = kalloc_page();
+            vmmap(&(child_proc->pgdir), va, new_page, PTE_FLAGS(*old_pte));
+            copyout(&(child_proc->pgdir), (void*)va, (void*)P2K(PTE_ADDRESS(*old_pte)), PAGE_SIZE);
         }
     }
     copy_sections(&(this_proc->pgdir.section_head), &(child_proc->pgdir.section_head));

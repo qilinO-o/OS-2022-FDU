@@ -121,6 +121,7 @@ isize filewrite(struct file* f, char* addr, isize n) {
             bcache.begin_op(&ctx);
             inodes.lock(f->ip);
             usize w = inodes.write(&ctx, f->ip, (u8*)(addr + nwrite), f->off, op_n);
+            f->off += w;
             inodes.unlock(f->ip);
             bcache.end_op(&ctx);
             nwrite += w;

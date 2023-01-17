@@ -39,6 +39,7 @@ void kernel_entry() {
 
     // TODO: map init.S to user space and trap_return to run icode
     struct proc* p = thisproc();
+    printk("init on pid=%d\n",p->pid);
     p->cwd = inodes.root;
     struct section *st = kalloc(sizeof(struct section));
     st->begin = (u64)icode - PAGE_BASE((u64)icode);

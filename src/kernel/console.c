@@ -20,7 +20,6 @@ struct {
 define_rest_init(console){
     init_spinlock(&(input.lock));
     init_sem(&(input.can_read_sem), 0);
-    //set_interrupt_handler(IRQ_AUX, console_intr);
 }
 
 isize console_write(Inode *ip, char *buf, isize n) {
@@ -76,6 +75,7 @@ void console_intr(char (*getc)()) {
     char c;
     _acquire_spinlock(&(input.lock));
     while((c = getc()) != 0xff){
+        //printk("^^%d^^",thisproc()->pid);
         if(c == '\r'){
             c = '\n';
         }
@@ -108,6 +108,7 @@ void console_intr(char (*getc)()) {
         else if(c == C('C')){
             uart_put_char('^');
             uart_put_char('C');
+            printk("%d\n",thisproc()->pid);
             ASSERT(kill(thisproc()->pid)!=-1);
         }
         else{ // normal char

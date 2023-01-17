@@ -76,6 +76,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 
 		// insert into new section
 		struct section *st = kalloc(sizeof(struct section));
+		memset(st, 0, sizeof(struct section));
 		st->begin = program_header.p_vaddr;
 		st->end = end;
 		if(end > max_end){
@@ -146,6 +147,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 	}
 	// add stack to section
 	struct section *stack_st = kalloc(sizeof(struct section));
+	memset(stack_st, 0, sizeof(struct section));
 	stack_st->flags = 1024;
 	stack_st->begin = sp - stack_page_size*PAGE_SIZE;
 	stack_st->end = sp;

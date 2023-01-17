@@ -179,6 +179,7 @@ int main(int argc, char *argv[]) {
 
     // Read and run input commands.
     while (getcmd(buf, sizeof(buf)) >= 0) {
+        // printf("new cmd in\n");
         if (buf[0] == 'c' && buf[1] == 'd' && buf[2] == ' ') {
             // Chdir must be called by the parent, not the child.
             buf[strlen(buf) - 1] = 0;  // chop \n
@@ -188,7 +189,10 @@ int main(int argc, char *argv[]) {
         }
         if (fork1() == 0)
             runcmd(parsecmd(buf));
+        //printf("sh will wait1\n");   
+        //printf("sh will wait2\n\n");
         wait(NULL);
+        //printf("one cmd ok, for next\n");
     }
 }
 

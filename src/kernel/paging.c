@@ -192,7 +192,7 @@ void free_sections(struct pgdir* pd){
 		}
 		for(u64 i=PAGE_BASE(st->begin); i<st->end; i+=PAGE_SIZE){
 			PTEntriesPtr pte_p = get_pte(pd, i, false);
-			if(*pte_p && (*pte_p & PTE_VALID)){
+			if(pte_p && (*pte_p & PTE_VALID)){
 				kfree_page((void*)P2K(PTE_ADDRESS(*pte_p)));
 			}
 		}
@@ -209,6 +209,9 @@ void copy_sections(ListNode* from_head, ListNode* to_head){
 		struct section* st = container_of(node, struct section, stnode);
 		struct section* new_st = kalloc(sizeof(struct section));
 		memmove(new_st, st, sizeof(struct section));
+		if(st->fp != NULL){
+			new_st->fp = filedup(st->fp);
+		}
 		_insert_into_list(to_head, &(new_st->stnode));
 	}
 }
