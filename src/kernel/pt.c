@@ -90,11 +90,13 @@ void free_pgdir(struct pgdir* pgdir){
     // TODO
     // Free pages used by the page table. If pgdir->pt=NULL, do nothing.
     // DONT FREE PAGES DESCRIBED BY THE PAGE TABLE
-    free_sections(pgdir);
+    // struct proc* p = container_of(pgdir, struct proc, pgdir);
+    // printk(">proc: pid = %d in free_pgdir\n", p->pid);
     PTEntriesPtr pt0 = pgdir->pt;
     if(pt0 == NULL){
         return;
     }
+    free_sections(pgdir);
     for(int i=0;i<N_PTE_PER_TABLE;++i){
         if(pt0[i] & PTE_VALID){
             PTEntriesPtr pt1 = (PTEntriesPtr)P2K(PTE_ADDRESS(pt0[i]));
@@ -113,7 +115,7 @@ void free_pgdir(struct pgdir* pgdir){
             kfree_page((void*)pt1);
         }
     }
-    kfree_page((void*)pt0);
+    kfree_page((void*)pgdir->pt);
     pgdir->pt = NULL;
 }
 
@@ -139,13 +141,13 @@ void attach_pgdir(struct pgdir* pgdir){
 
 /*
  * Copy len bytes from p to user address va in page table pgdir.
- * Allocate physical pages if required.
+ * (Allocate physical pages if required.) no
+ * instead, caller must vmmap to allocate physical pages first
  * Useful when pgdir is not the current page table.
  */
 int copyout(struct pgdir* pd, void* va, void *p, usize len){
     // TODO
     while(len > 0){
-        //void* va_off = va - ((u64)va % PAGE_SIZE)s;
         void* va_off = (void*)PAGE_BASE((u64)va);
         usize this_len = MIN(len, PAGE_SIZE-(u64)(va-va_off));
         PTEntriesPtr pte_p = get_pte(pd, (u64)va, true);

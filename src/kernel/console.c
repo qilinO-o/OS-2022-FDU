@@ -75,7 +75,6 @@ void console_intr(char (*getc)()) {
     char c;
     _acquire_spinlock(&(input.lock));
     while((c = getc()) != 0xff){
-        //printk("^^%d^^",thisproc()->pid);
         if(c == '\r'){
             c = '\n';
         }
@@ -108,8 +107,13 @@ void console_intr(char (*getc)()) {
         else if(c == C('C')){
             uart_put_char('^');
             uart_put_char('C');
-            printk("%d\n",thisproc()->pid);
-            ASSERT(kill(thisproc()->pid)!=-1);
+            int pid = thisproc()->pid;
+            if(pid == -1 || pid == 0 || pid == 1){
+                printk(" cannot kill idle or root or shell\n");
+            }
+            else{
+                ASSERT(kill(thisproc()->pid)!=-1);
+            }
         }
         else{ // normal char
             if((input.e + 1)%INPUT_BUF == input.r){

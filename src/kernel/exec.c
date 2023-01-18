@@ -22,6 +22,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 	Inode* inode_p = namei(path, &ctx);
 	if(inode_p == NULL){
 		bcache.end_op(&ctx);
+		printk("no such file to execve\n");
 		return -1;
 	}
 	inodes.lock(inode_p);
@@ -138,7 +139,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 	bcache.end_op(&ctx);
 
 	// create user stack
-	u64 stack_page_size = 5;
+	u64 stack_page_size = 10;
 	u64 sp = PAGE_BASE(max_end) + PAGE_SIZE + stack_page_size * PAGE_SIZE;
 	for(u64 i=1;i<=stack_page_size;++i){
 		void* p = kalloc_page();
@@ -156,6 +157,7 @@ int execve(const char *path, char *const argv[], char *const envp[]) {
 	// fill in stack
 	struct proc* this_proc = thisproc();
 	
+	// leave more room in case stack continue to pop and page fault
 	sp -= 16;
     u64 tmp = 0;
     copyout(exec_pgdir, (void*)sp, &tmp, 8);

@@ -20,7 +20,7 @@ typedef struct pidmap{
 static INLINE void init_pidmap(pidmap_t* pidmap, int size){
     pidmap->pid_namespace_size = size;
     pidmap->nr_free = size;
-    pidmap->pid_base = -1;
+    pidmap->pid_base = 0;
     init_spinlock(&pidmap->pid_base_lock);
     pidmap->page = (BitmapCell*)kalloc(size/8);
     memset(pidmap->page,0,sizeof(pidmap->page));

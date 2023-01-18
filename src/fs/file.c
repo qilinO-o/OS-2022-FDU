@@ -54,17 +54,17 @@ void fileclose(struct file* f) {
     _acquire_spinlock(&(ftable.lock));
     f->ref--;
     if(f->ref <= 0){
-        File* temp = f;
+        File temp = *f;
         f->ref = 0;
         f->type = FD_NONE;
         _release_spinlock(&(ftable.lock));
-        if(temp->type == FD_PIPE){
+        if(temp.type == FD_PIPE){
             pipeClose(f->pipe, f->writable);
         }
-        else{
+        if(temp.type != FD_NONE){
             OpContext ctx;
             bcache.begin_op(&ctx);
-            inodes.put(&ctx, temp->ip);
+            inodes.put(&ctx, temp.ip);
             bcache.end_op(&ctx);
         }
     }

@@ -47,8 +47,10 @@ void kernel_entry() {
     st->flags = ST_TEXT;
     init_sleeplock(&(st->sleeplock));
     _insert_into_list(&(p->pgdir.section_head), &(st->stnode));
-    for(u64 va = PAGE_BASE((u64)icode);va <= (u64)eicode; va += PAGE_SIZE){
-        vmmap(&(p->pgdir), 0x0, (void*)va, PTE_USER_DATA | PTE_RO);
+    for(u64 ka = PAGE_BASE((u64)icode);ka <= (u64)eicode; ka += PAGE_SIZE){
+        u64 off = 0;
+        vmmap(&(p->pgdir), (0x0+off), (void*)ka, PTE_USER_DATA | PTE_RO);
+        off += PAGE_SIZE;
     }
     
     p->ucontext->elr = (u64)icode - PAGE_BASE((u64)icode);

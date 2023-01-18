@@ -37,7 +37,7 @@ void init_container(struct container* container)
     else{
         pidmap.pid_namespace_size = LOCAL_PID_MAX_DEFAULT;
         pidmap.nr_free = LOCAL_PID_MAX_DEFAULT;
-        pidmap.pid_base = -1;
+        pidmap.pid_base = 0;
         init_spinlock(&pidmap.pid_base_lock);
         memset(lpage,0,sizeof(lpage));
         pidmap.page = lpage;

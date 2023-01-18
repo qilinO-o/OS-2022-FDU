@@ -196,7 +196,11 @@ void free_sections(struct pgdir* pd){
 				kfree_page((void*)P2K(PTE_ADDRESS(*pte_p)));
 			}
 		}
+		if(st->fp != NULL){
+			fileclose(st->fp);
+		}
 		node = node->next;
+		_detach_from_list(&(st->stnode));
 		kfree((void*)st);
 	}
 }

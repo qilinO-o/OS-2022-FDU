@@ -188,7 +188,7 @@ int wait(int* exitcode, int* pid)
             _release_spinlock(&pid_proc_tree_lock);
             
             // free resources of the child proc  
-            //free_pgdir(&(cp->pgdir));
+            free_pgdir(&(child_proc->pgdir));
             free_pid(&global_pidmap, child_proc->pid);
             free_pid(&(child_proc->container->pidmap), child_proc->localpid);
             kfree_page(child_proc->kstack);
@@ -323,10 +323,9 @@ int fork() {
     /* TODO: Your code here. */
     struct proc* child_proc = create_proc();
     struct proc* this_proc = thisproc();
-         
     set_parent_to_this(child_proc);
     // copy all registers
-    *(child_proc->ucontext) = *(this_proc->ucontext);
+    memmove(child_proc->ucontext, this_proc->ucontext, sizeof(UserContext));
     // fork return as child
     child_proc->ucontext->reserved[0] = 0;
     // use same working dictionary
@@ -338,34 +337,35 @@ int fork() {
         }
     }
     // copy pgdir
-    free_pgdir(&(child_proc->pgdir));
     PTEntriesPtr old_pte;
     _for_in_list(node, &(this_proc->pgdir.section_head)){
         if(node == &(this_proc->pgdir.section_head)){
             break;
         }
         struct section* st = container_of(node, struct section, stnode);
-        // for(u64 va = PAGE_BASE(st->begin); va < st->end; va += PAGE_SIZE){
-        //     old_pte = get_pte(&(this_proc->pgdir), va, false);
-        //     if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
-        //         continue;
-        //     }
-        //     vmmap(&(child_proc->pgdir), va, (void*)P2K(PTE_ADDRESS(*old_pte))
-        //     , PTE_FLAGS(*old_pte) | PTE_RO);
-        // }
+        // fork with cow
         for(u64 va = PAGE_BASE(st->begin); va < st->end; va += PAGE_SIZE){
             old_pte = get_pte(&(this_proc->pgdir), va, false);
             if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
                 continue;
             }
-            void* new_page = kalloc_page();
-            vmmap(&(child_proc->pgdir), va, new_page, PTE_FLAGS(*old_pte));
-            copyout(&(child_proc->pgdir), (void*)va, (void*)P2K(PTE_ADDRESS(*old_pte)), PAGE_SIZE);
+            vmmap(&(child_proc->pgdir), va, (void*)P2K(PTE_ADDRESS(*old_pte))
+            , PTE_FLAGS(*old_pte) | PTE_RO);
         }
+        // fork without cow
+        // for(u64 va = PAGE_BASE(st->begin); va < st->end; va += PAGE_SIZE){
+        //     old_pte = get_pte(&(this_proc->pgdir), va, false);
+        //     if((old_pte == NULL) || !(*old_pte & PTE_VALID)){
+        //         continue;
+        //     }
+        //     void* new_page = kalloc_page();
+        //     vmmap(&(child_proc->pgdir), va, new_page, PTE_FLAGS(*old_pte));
+        //     copyout(&(child_proc->pgdir), (void*)va, (void*)P2K(PTE_ADDRESS(*old_pte)), PAGE_SIZE);
+        // }
     }
     copy_sections(&(this_proc->pgdir.section_head), &(child_proc->pgdir.section_head));
 
     // start proc
     start_proc(child_proc, trap_return, 0);
-    return child_proc->pid;
+    return child_proc->localpid;
 }
