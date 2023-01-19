@@ -58,23 +58,24 @@ u64 sbrk(i64 size){
 
 
 void* alloc_page_for_user(){
-	while(left_page_cnt() <= REVERSED_PAGES){ //this is a soft limit
-		//TODO
-		struct proc* proc_to_swap = get_offline_proc();
-		if(proc_to_swap == NULL){
-			break;
-		}
-		_for_in_list(node, &(proc_to_swap->pgdir.section_head)){
-			if(node == &(proc_to_swap->pgdir.section_head)) break;
-			struct section* st = container_of(node, struct section, stnode);
-			if(st->flags & ST_SWAP){
-				continue;
-			}
-			proc_to_swap->pgdir.online = 1;
-			swapout(&(proc_to_swap->pgdir), st);
-			break;
-		}
-	}
+	// turn off swap
+	// while(left_page_cnt() <= REVERSED_PAGES){ //this is a soft limit
+	// 	//TODO
+	// 	struct proc* proc_to_swap = get_offline_proc();
+	// 	if(proc_to_swap == NULL){
+	// 		break;
+	// 	}
+	// 	_for_in_list(node, &(proc_to_swap->pgdir.section_head)){
+	// 		if(node == &(proc_to_swap->pgdir.section_head)) break;
+	// 		struct section* st = container_of(node, struct section, stnode);
+	// 		if(st->flags & ST_SWAP){
+	// 			continue;
+	// 		}
+	// 		proc_to_swap->pgdir.online = 1;
+	// 		swapout(&(proc_to_swap->pgdir), st);
+	// 		break;
+	// 	}
+	// }
 	return kalloc_page();
 }
 
